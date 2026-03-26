@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="title">UTubeMp3 - Music Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    
+    <nav class="navbar glass">
+        <div class="logo">
+            <h1>UTube<span class="highlight">Mp3</span></h1>
+        </div>
+        <div class="nav-links">
+            <button class="nav-btn active" id="nav-search" data-i18n="searchTab">Search</button>
+            <button class="nav-btn" id="nav-history" data-i18n="historyTab">My Music</button>
+            <div class="lang-switcher">
+                <button class="lang-btn active" data-lang="en">EN</button>
+                <button class="lang-btn" data-lang="uk">УКР</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Search Section -->
+        <section id="section-search" class="section active">
+            <div class="search-box glass">
+                <select id="search-type" style="background: transparent; color: white; border: none; outline: none; padding: 0 1rem; border-right: 1px solid var(--glass-border); font-size: 1rem; font-weight: 600; cursor: pointer;">
+                    <option value="artists" style="color: black;" data-i18n="artists">Artists</option>
+                    <option value="songs" style="color: black;" data-i18n="songs">Tracks</option>
+                    <option value="albums" style="color: black;" data-i18n="albums">Albums</option>
+                </select>
+                <input type="text" id="search-input" data-i18n-placeholder="searchPlaceholder" placeholder="What are we looking for?...">
+                <button id="search-btn" data-i18n="searchBtn">Search</button>
+            </div>
+            
+            <div id="recent-searches-container" style="display: none; margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;" data-i18n="recentSearches">Recent Searches</h3>
+                <div id="recent-searches" class="grid-results"></div>
+            </div>
+            
+            <div class="loader" id="search-loader" style="display: none;"></div>
+            
+            <div id="search-results" class="grid-results">
+                <!-- Artists cards will go here -->
+            </div>
+        </section>
+
+        <!-- Artist Profile Section -->
+        <section id="section-artist" class="section glass" style="display: none;">
+            <button class="back-btn" id="back-to-search" data-i18n="backToSearch">&larr; Back to search</button>
+            
+            <div class="artist-header">
+                <img id="artist-img" src="" alt="Artist">
+                <div class="artist-info">
+                    <h2 id="artist-name">Artist Name</h2>
+                    <p id="artist-desc">Description...</p>
+                </div>
+            </div>
+            
+            <div class="artist-search-box glass" style="margin-bottom: 2rem; padding: 0.5rem; display: flex;">
+                <input type="text" id="artist-search-input" data-i18n-placeholder="artistSearchPlaceholder" placeholder="Search track or album..." style="flex: 1; background: transparent; border: none; color: var(--text-light); font-size: 1.1rem; padding: 1rem; outline: none;">
+            </div>
+
+            <div class="artist-content">
+                <div class="column">
+                    <h3 data-i18n="latestTracks">Latest Tracks</h3>
+                    <div id="artist-songs" class="list-container">
+                        <!-- Songs will go here -->
+                    </div>
+                </div>
+                <div class="column">
+                    <h3 data-i18n="albumsTitle">Albums</h3>
+                    <div id="artist-albums" class="grid-albums">
+                        <!-- Albums will go here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Album Section -->
+        <section id="section-album" class="section glass" style="display: none;">
+            <button class="back-btn" id="back-to-artist-from-album" data-i18n="backToArtist">&larr; Back to artist</button>
+            <div class="artist-header">
+                <img id="album-img" src="" alt="Album">
+                <div class="artist-info">
+                    <h2 id="album-title">Album Title</h2>
+                    <p id="album-desc">Author / Year</p>
+                    <button id="download-album-btn" class="download-btn" style="margin-top: 1rem;" data-i18n="downloadEntireAlbum">⬇ Download entire album</button>
+                </div>
+            </div>
+            
+            <div class="column">
+                <h3 data-i18n="albumTracks">Album tracks</h3>
+                <div id="album-tracks" class="list-container">
+                    <!-- Tracks will go here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- History/Library Section -->
+        <section id="section-history" class="section glass" style="display: none;">
+            <h2 data-i18n="myMusicTitle">My Music (Downloaded)</h2>
+            <div class="loader" id="history-loader" style="display: none;"></div>
+            <div id="history-results" class="list-container">
+                <!-- Downloaded songs will go here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Downloads Progress Toast Area -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
