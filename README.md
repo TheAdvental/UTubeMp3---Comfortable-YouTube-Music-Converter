@@ -1,6 +1,6 @@
 # UTubeMp3 - Comfortable YouTube Music Converter
 
-***"Good morning, afternoon, or evening (right now it's 1:52 AM for me). This is a solution to my painful problem (downloading music) vibecoded in an hour. I needed to solve the problem of downloading large volumes of music as quickly as possible, so I added the ability to download entire albums at once. But that's not the point, I hope this site will be as useful to someone else as it was to me in its time. I might update this product in the future, although I'm satisfied with it in its current form (except for a few minor details). Alright, I'm going to sleep, I'm tired of writing this text. In the meantime, here is a tutorial from Gemini 3.1 Pro for running this site."***
+***"Good morning, afternoon, or evening (right now it's 1:53 AM for me). This is a solution to my painful problem (downloading music) vibecoded in an hour. I needed to solve the problem of downloading large volumes of music as quickly as possible, so I added the ability to download entire albums at once. But that's not the point, I hope this site will be as useful to someone else as it was to me in its time. I might update this product in the future, although I'm satisfied with it in its current form (except for a few minor details). Alright, I'm going to sleep, I'm tired of writing this text. In the meantime, here is a tutorial from Gemini 3.1 Pro for running this site."***
 
 ---
 
