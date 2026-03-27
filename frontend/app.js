@@ -8,7 +8,12 @@ const TRANSLATIONS = {
         artists: "Artists",
         songs: "Tracks",
         albums: "Albums",
+        byUrl: "By URL",
+        searchByUrlTitle: "Fast Search by URL",
+        searchByInfoTitle: "Search by Track Information",
         searchPlaceholder: "What are we looking for?...",
+        searchPlaceholderUrl: "Paste YouTube link here...",
+        invalidUrlError: "Please enter a valid YouTube or YouTube Music link.",
         searchBtn: "Search",
         recentSearches: "Recent Searches",
         backToSearch: "← Back to search",
@@ -51,16 +56,32 @@ const TRANSLATIONS = {
         downloadProgressTitle: "Downloading:",
         progressStr: "Progress:",
         downloadSuccessMsg: "successfully downloaded to MP3!",
-        downloadErrorMsg: "Error downloading"
+        downloadErrorMsg: "Error downloading",
+        queueCountSingle: "1 track downloading",
+        queueCountMultiple: "{count} tracks downloading",
+        queueCompleted: "All downloads completed",
+        selectedCount: "{count} selected",
+        downloadSelected: "⬇ Download",
+        deleteSelected: "🗑 Delete",
+        cancelSelection: "✕ Cancel",
+        confirmDelete: "Are you sure you want to delete the selected tracks and files? This cannot be undone.",
+        deleteSuccess: "Successfully deleted selected items.",
+        deleteFailed: "Failed to delete.",
+        multiSelectMode: "Select Multiple",
     },
     uk: {
         title: "UTubeMp3 - Завантажувач Музики",
         searchTab: "Пошук",
         historyTab: "Моя Музика",
-        artists: "Виконавці",
+        artists: "Артисти",
         songs: "Треки",
         albums: "Альбоми",
-        searchPlaceholder: "Що шукаємо?...",
+        byUrl: "За посиланням",
+        searchByUrlTitle: "Швидкий пошук за посиланням",
+        searchByInfoTitle: "Пошук за інформацією",
+        searchPlaceholder: "Що будемо шукати?...",
+        searchPlaceholderUrl: "Вставте посилання на YouTube...",
+        invalidUrlError: "Будь ласка, введіть дійсне посилання на YouTube або YouTube Music.",
         searchBtn: "Знайти",
         recentSearches: "Історія пошуку",
         backToSearch: "← Назад до пошуку",
@@ -103,7 +124,18 @@ const TRANSLATIONS = {
         downloadProgressTitle: "Завантаження:",
         progressStr: "Прогрес:",
         downloadSuccessMsg: "успішно завантажено в MP3!",
-        downloadErrorMsg: "Помилка завантаження"
+        downloadErrorMsg: "Помилка завантаження",
+        queueCountSingle: "1 трек завантажується",
+        queueCountMultiple: "{count} треків завантажується",
+        queueCompleted: "Всі завантаження завершено",
+        selectedCount: "Обрано: {count}",
+        downloadSelected: "⬇ Завантажити",
+        deleteSelected: "🗑 Видалити",
+        cancelSelection: "✕ Скасувати",
+        confirmDelete: "Ви впевнені, що хочете видалити обрані файли з комп'ютера і історії? Цю дію не можна скасувати.",
+        deleteSuccess: "Успішно видалено.",
+        deleteFailed: "Не вдалося видалити.",
+        multiSelectMode: "Вибрати декілька",
     }
 };
 
@@ -162,6 +194,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     history.replaceState({ section: 'search' }, '', '#search');
     renderRecentSearches();
+
+    const queueHeader = document.getElementById('queue-header');
+    if (queueHeader) {
+        queueHeader.addEventListener('click', () => {
+            const qContainer = document.getElementById('queue-container');
+            const qList = document.getElementById('queue-list');
+            qContainer.classList.toggle('expanded');
+            if (qContainer.classList.contains('expanded')) {
+                qList.style.display = 'block';
+            } else {
+                qList.style.display = 'none';
+            }
+        });
+    }
+    
+    const albumMultiSelectBtn = document.getElementById('multi-select-album-btn');
+    const historyMultiSelectBtn = document.getElementById('multi-select-history-btn');
+
+    albumMultiSelectBtn?.addEventListener('click', () => {
+        const list = document.getElementById('album-tracks');
+        list.classList.toggle('selection-mode');
+        
+        if (list.classList.contains('selection-mode')) {
+            albumMultiSelectBtn.classList.add('active');
+            injectCheckboxes('album-tracks', 'download');
+        } else {
+            albumMultiSelectBtn.classList.remove('active');
+            uncheckAll();
+            removeCheckboxes('album-tracks');
+        }
+    });
+
+    historyMultiSelectBtn?.addEventListener('click', () => {
+        const list = document.getElementById('history-results');
+        list.classList.toggle('selection-mode');
+        
+        if (list.classList.contains('selection-mode')) {
+            historyMultiSelectBtn.classList.add('active');
+            injectCheckboxes('history-results', 'delete');
+        } else {
+            historyMultiSelectBtn.classList.remove('active');
+            uncheckAll();
+            removeCheckboxes('history-results');
+        }
+    });
+
 });
 
 // DOM Elements
@@ -207,10 +285,30 @@ navHistory.addEventListener('click', () => {
     switchSection('history');
     loadHistory();
 });
+
+document.querySelector('.logo')?.addEventListener('click', () => {
+    navSearch.click();
+    // Clear search input if desired, or just return to the main search view
+    const searchInput = document.getElementById('search-input');
+    if (searchInput && searchInput.value === '') {
+        // Already empty
+    }
+});
+
 backToSearchBtn.addEventListener('click', () => history.back());
 backToArtistFromAlbum.addEventListener('click', () => history.back());
 
 function switchSection(sec, pushState = true) {
+    uncheckAll(); // Clean selection state on tab switch
+    
+    document.getElementById('album-tracks')?.classList.remove('selection-mode');
+    removeCheckboxes('album-tracks');
+    document.getElementById('multi-select-album-btn')?.classList.remove('active');
+    
+    document.getElementById('history-results')?.classList.remove('selection-mode');
+    removeCheckboxes('history-results');
+    document.getElementById('multi-select-history-btn')?.classList.remove('active');
+
     navSearch.classList.remove('active');
     navHistory.classList.remove('active');
     
@@ -276,31 +374,66 @@ function renderRecentSearches() {
 }
 
 // Search Feature
-searchBtn.addEventListener('click', executeSearch);
-searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') executeSearch();
+const urlSearchInput = document.getElementById('url-search-input');
+const urlSearchBtn = document.getElementById('url-search-btn');
+
+urlSearchBtn.addEventListener('click', () => executeSearch('url'));
+urlSearchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') executeSearch('url');
 });
 
-async function executeSearch() {
-    const query = searchInput.value.trim();
-    const type = document.getElementById('search-type').value;
+searchBtn.addEventListener('click', () => executeSearch('info'));
+searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') executeSearch('info');
+});
+
+async function executeSearch(source) {
+    let query, type;
+    
+    if (source === 'url') {
+        query = urlSearchInput.value.trim();
+        type = 'url';
+    } else {
+        query = searchInput.value.trim();
+        type = document.getElementById('search-type').value;
+    }
+    
     if (!query) return;
 
     searchResults.innerHTML = '';
     searchLoader.style.display = 'block';
     
+    // Check if query is a YouTube URL
+    const ytUrlRegex = /(?:https?:\/\/)?(?:www\.|music\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = query.match(ytUrlRegex);
+    
     try {
-        const res = await fetch(`${API_URL}/youtube/search?query=${encodeURIComponent(query)}&filter=${type}`);
-        const data = await res.json();
+        let res, data;
+        let renderType = type;
+        
+        if (type === 'url' || (match && match[1])) {
+            if (!match || !match[1]) {
+                searchLoader.style.display = 'none';
+                showToast(t('error'), t('invalidUrlError'), 'error');
+                return;
+            }
+            const videoId = match[1];
+            res = await fetch(`${API_URL}/youtube/song/${videoId}`);
+            data = await res.json();
+            renderType = 'songs'; // Force render as songs list
+        } else {
+            res = await fetch(`${API_URL}/youtube/search?query=${encodeURIComponent(query)}&filter=${type}`);
+            data = await res.json();
+        }
         
         searchLoader.style.display = 'none';
         
-        if (data.length === 0) {
+        if (!data || data.detail || data.error || data.length === 0) {
             searchResults.innerHTML = `<p style="text-align:center; width:100%; grid-column: 1 / -1;">${t('nothingFound')}</p>`;
             return;
         }
 
-        if (type === 'artists') {
+        if (renderType === 'artists') {
             searchResults.className = 'grid-results';
             data.forEach(artist => {
                 const thumb = artist.thumbnails && artist.thumbnails.length > 0 ? artist.thumbnails[artist.thumbnails.length-1].url : 'https://via.placeholder.com/120?text=No+Image';
@@ -318,7 +451,7 @@ async function executeSearch() {
                 });
                 searchResults.appendChild(card);
             });
-        } else if (type === 'songs') {
+        } else if (renderType === 'songs') {
             searchResults.className = 'list-container';
             data.forEach(song => {
                 if (!song.videoId) return;
@@ -327,7 +460,7 @@ async function executeSearch() {
                 const albumName = song.album ? song.album.name : '';
                 searchResults.appendChild(createSongItem(song.videoId, song.title, artistName, thumb, albumName));
             });
-        } else if (type === 'albums') {
+        } else if (renderType === 'albums') {
             searchResults.className = 'grid-albums';
             data.forEach(album => {
                 if (!album.browseId) return;
@@ -507,6 +640,17 @@ window.addEventListener('scroll', () => {
 function createSongItem(videoId, title, artist, thumbnail, albumName) {
     const div = document.createElement('div');
     div.className = 'song-item';
+    
+    // Prepare data strings safely for HTML attributes
+    const safeTitle = (title || "").replace(/"/g, '&quot;');
+    const safeArtist = (artist || "").replace(/"/g, '&quot;');
+    const safeThumb = (thumbnail || "").replace(/"/g, '&quot;');
+    
+    div.setAttribute('data-video-id', videoId);
+    div.setAttribute('data-title', safeTitle);
+    div.setAttribute('data-artist', safeArtist);
+    div.setAttribute('data-thumbnail', safeThumb);
+
     div.innerHTML = `
         <img src="${thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
         <div class="song-info">
@@ -575,6 +719,64 @@ document.getElementById('download-album-btn').addEventListener('click', () => {
 
 // Downloads & Polling
 const activeDownloads = new Set();
+const downloadQueue = new Map();
+
+function updateQueueUI() {
+    const qContainer = document.getElementById('queue-container');
+    const qCount = document.getElementById('queue-count');
+    const qProgressFill = document.getElementById('queue-progress-fill');
+    const qList = document.getElementById('queue-list');
+    
+    if (downloadQueue.size === 0) {
+        qContainer.classList.remove('active');
+        return;
+    }
+    
+    qContainer.classList.add('active');
+    
+    let activeCount = 0;
+    let totalProgress = 0;
+    
+    qList.innerHTML = '';
+    
+    downloadQueue.forEach((item, videoId) => {
+        if (item.status === 'downloading') {
+            activeCount++;
+            let pVal = parseFloat(item.progress) || 0;
+            totalProgress += pVal;
+        }
+        
+        const qItem = document.createElement('div');
+        qItem.className = 'queue-item';
+        qItem.innerHTML = `
+            <div class="queue-item-header">
+                <span class="queue-item-title" title="${item.title}">${item.title}</span>
+                <span class="queue-item-status">${item.status === 'completed' ? t('success') : item.status === 'error' ? t('error') : item.progress}</span>
+            </div>
+            <div class="queue-item-progress-bar">
+                <div class="queue-item-progress-fill" style="width: ${item.status === 'completed' ? '100%' : item.status === 'error' ? '0%' : item.progress}; background: ${item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? '#ef4444' : 'var(--primary)'}"></div>
+            </div>
+        `;
+        qList.appendChild(qItem);
+    });
+    
+    if (activeCount > 0) {
+        qCount.innerText = activeCount === 1 ? t('queueCountSingle') : t('queueCountMultiple').replace('{count}', activeCount);
+        qProgressFill.style.width = (totalProgress / activeCount) + '%';
+    } else {
+        qCount.innerText = t('queueCompleted');
+        qProgressFill.style.width = '100%';
+        
+        setTimeout(() => {
+            let allDone = true;
+            downloadQueue.forEach(i => { if(i.status === 'downloading') allDone = false; });
+            if (allDone) {
+                downloadQueue.clear();
+                updateQueueUI();
+            }
+        }, 5000);
+    }
+}
 
 async function startDownload(videoId, title, artist, thumbnail) {
     if (activeDownloads.has(videoId)) {
@@ -595,6 +797,8 @@ async function startDownload(videoId, title, artist, thumbnail) {
 
         showToast(t('info'), `${t('downloadStarted')} ${title}`);
         activeDownloads.add(videoId);
+        downloadQueue.set(videoId, { title: title, progress: '0%', status: 'downloading' });
+        updateQueueUI();
         pollProgress(videoId, title);
         
     } catch (err) {
@@ -603,23 +807,25 @@ async function startDownload(videoId, title, artist, thumbnail) {
 }
 
 function pollProgress(videoId, title) {
-    const toastId = 'toast-' + videoId;
-    createPersistentToast(toastId, title, '0%');
-    
     const interval = setInterval(async () => {
         try {
             const res = await fetch(`${API_URL}/downloader/progress/${videoId}`);
             const data = await res.json();
             
-            updatePersistentToast(toastId, data.progress);
+            const qItem = downloadQueue.get(videoId);
+            if(qItem) {
+                qItem.progress = data.progress;
+                updateQueueUI();
+            }
             
             if (data.status === 'completed' || data.status === 'error') {
                 clearInterval(interval);
                 activeDownloads.delete(videoId);
                 
-                setTimeout(() => {
-                    document.getElementById(toastId)?.remove();
-                }, 3000);
+                if(qItem) {
+                    qItem.status = data.status;
+                    updateQueueUI();
+                }
                 
                 if (data.status === 'completed') {
                     showToast(t('success'), `${title} ${t('downloadSuccessMsg')}`, 'success');
@@ -658,6 +864,7 @@ async function loadHistory() {
             
             const dateStr = new Date(song.downloaded_at).toLocaleString((currentLang === 'uk') ? 'uk-UA' : 'en-US');
             
+            div.setAttribute('data-video-id', song.video_id);
             div.innerHTML = `
                 <img src="${song.thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
                 <div class="song-info">
@@ -665,6 +872,7 @@ async function loadHistory() {
                     <p>${song.artist} • ${t('downloadedAtStr')} ${dateStr}</p>
                     <p style="font-size:0.75rem; color:#64748b; margin-top: 4px;">${t('fileStr')} ${song.file_path}</p>
                 </div>
+                <button class="action-btn delete-btn" style="margin-left: 1rem;" onclick="deleteSongs(['${song.video_id}'])">🗑</button>
             `;
             historyResults.appendChild(div);
         });
@@ -673,6 +881,198 @@ async function loadHistory() {
         showToast(t('error'), t('historyFailed'), 'error');
     }
 }
+
+// Bulk Delete Logic
+async function deleteSongs(videoIds) {
+    if(!confirm(t('confirmDelete'))) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/downloader/history`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ video_ids: videoIds })
+        });
+        
+        showToast(t('success'), t('deleteSuccess'), 'success');
+        uncheckAll();
+        document.getElementById('history-results')?.classList.remove('selection-mode');
+        removeCheckboxes('history-results');
+        document.getElementById('multi-select-history-btn')?.classList.remove('active');
+        
+        if (secHistory.style.display === 'block') {
+            loadHistory();
+        }
+    } catch (err) {
+        showToast(t('error'), t('deleteFailed'), 'error');
+    }
+}
+
+// Selection State Management
+let selectedForDownload = [];
+let selectedForDelete = [];
+
+document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('song-checkbox')) {
+        updateSelectionState();
+    }
+});
+
+function updateSelectionState() {
+    selectedForDownload = [];
+    selectedForDelete = [];
+    
+    document.querySelectorAll('.song-checkbox:checked').forEach(cb => {
+        if (cb.getAttribute('data-type') === 'download') {
+            selectedForDownload.push({
+                videoId: cb.getAttribute('data-video-id'),
+                title: cb.getAttribute('data-title'),
+                artist: cb.getAttribute('data-artist'),
+                thumbnail: cb.getAttribute('data-thumbnail')
+            });
+        } else if (cb.getAttribute('data-type') === 'delete') {
+            selectedForDelete.push(cb.getAttribute('data-video-id'));
+        }
+    });
+
+    let floatingBtn = document.getElementById('floating-bulk-action-btn');
+    if (!floatingBtn) {
+        floatingBtn = document.createElement('button');
+        floatingBtn.id = 'floating-bulk-action-btn';
+        floatingBtn.style.animation = 'fadeIn 0.2s';
+        floatingBtn.style.marginLeft = 'auto'; // Push to the right edge
+        
+        floatingBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (selectedForDownload.length > 0) {
+                let delay = 0;
+                selectedForDownload.forEach(track => {
+                    setTimeout(() => startDownload(track.videoId, track.title, track.artist, track.thumbnail), delay);
+                    delay += 1000;
+                });
+                uncheckAll();
+                document.getElementById('album-tracks')?.classList.remove('selection-mode');
+                removeCheckboxes('album-tracks');
+                document.getElementById('multi-select-album-btn')?.classList.remove('active');
+            } else if (selectedForDelete.length > 0) {
+                deleteSongs(selectedForDelete);
+            }
+        });
+    }
+
+    const totalSelected = selectedForDownload.length + selectedForDelete.length;
+
+    if (totalSelected > 0) {
+        floatingBtn.style.display = 'inline-block';
+        if (selectedForDownload.length > 0) {
+            floatingBtn.className = 'action-btn download-btn';
+            floatingBtn.innerText = `⬇ ${t('downloadSelected')} (${selectedForDownload.length})`;
+        } else {
+            floatingBtn.className = 'action-btn delete-btn';
+            floatingBtn.innerText = `🗑 ${t('deleteSelected')} (${selectedForDelete.length})`;
+        }
+        
+        if (lastInteractedItem && lastInteractedItem.querySelector('.song-checkbox')?.checked) {
+            lastInteractedItem.appendChild(floatingBtn);
+        } else {
+            const anyChecked = document.querySelector('.song-checkbox:checked');
+            if (anyChecked) {
+                anyChecked.closest('.song-item').appendChild(floatingBtn);
+            }
+        }
+    } else {
+        if (floatingBtn.parentNode) {
+            floatingBtn.parentNode.removeChild(floatingBtn);
+        }
+    }
+}
+
+function injectCheckboxes(containerId, type) {
+    const list = document.getElementById(containerId);
+    if (!list) return;
+    list.querySelectorAll('.song-item').forEach(item => {
+        if (!item.querySelector('.song-checkbox-container')) {
+            const cbContainer = document.createElement('div');
+            cbContainer.className = 'song-checkbox-container';
+            
+            const vid = item.getAttribute('data-video-id');
+            const title = item.getAttribute('data-title') || '';
+            const artist = item.getAttribute('data-artist') || '';
+            const thumb = item.getAttribute('data-thumbnail') || '';
+            
+            cbContainer.innerHTML = `<input type="checkbox" class="song-checkbox" data-type="${type}" data-video-id="${vid}" data-title="${title}" data-artist="${artist}" data-thumbnail="${thumb}">`;
+            
+            item.prepend(cbContainer);
+        }
+    });
+}
+
+function removeCheckboxes(containerId) {
+    const list = document.getElementById(containerId);
+    if (!list) return;
+    list.querySelectorAll('.song-checkbox-container').forEach(el => el.remove());
+}
+
+function uncheckAll() {
+    document.querySelectorAll('.song-checkbox').forEach(cb => cb.checked = false);
+    updateSelectionState();
+}
+
+// Drag to select functionality
+let isDragSelecting = false;
+let dragCheckState = true;
+let lastInteractedItem = null;
+
+document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return; // Only left click
+    
+    // Ignore if clicking the floating action button
+    if (e.target.closest('#floating-bulk-action-btn')) return;
+    
+    const item = e.target.closest('.song-item');
+    if (!item) return;
+    
+    if (!item.closest('.selection-mode')) return;
+
+    isDragSelecting = true;
+    lastInteractedItem = item;
+    const cb = item.querySelector('.song-checkbox');
+    
+    if (cb) {
+        if (e.target !== cb) {
+            cb.checked = !cb.checked;
+            dragCheckState = cb.checked;
+            updateSelectionState();
+            e.preventDefault(); // Prevent text/image selection
+        } else {
+            // Checkbox clicked natively
+            dragCheckState = !cb.checked;
+        }
+    }
+});
+
+document.addEventListener('mouseover', (e) => {
+    if (!isDragSelecting) return;
+    
+    const item = e.target.closest('.song-item');
+    if (!item) return;
+    if (!item.closest('.selection-mode')) return;
+
+    lastInteractedItem = item;
+    const cb = item.querySelector('.song-checkbox');
+    if (cb && cb.checked !== dragCheckState) {
+        cb.checked = dragCheckState;
+        updateSelectionState();
+    }
+});
+
+document.addEventListener('mouseup', (e) => {
+    if (e.button !== 0) return;
+    isDragSelecting = false;
+});
+
+document.addEventListener('mouseleave', () => {
+    isDragSelecting = false;
+});
 
 // Toast UI System
 function showToast(title, message, type = 'info') {
@@ -691,25 +1091,4 @@ function showToast(title, message, type = 'info') {
     }, 4000);
 }
 
-function createPersistentToast(id, title, progressVal) {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.id = id;
-    toast.innerHTML = `
-        <div class="toast-title">${t('downloadProgressTitle')} ${title}</div>
-        <div class="toast-body">
-            <span>${t('progressStr')}</span>
-            <span class="progress-val" style="font-weight:bold; color:var(--primary);">${progressVal}</span>
-        </div>
-    `;
-    container.appendChild(toast);
-}
-
-function updatePersistentToast(id, progressVal) {
-    const toast = document.getElementById(id);
-    if(toast) {
-        const valSpan = toast.querySelector('.progress-val');
-        if(valSpan) valSpan.innerText = progressVal;
-    }
-}
+// Replaced by queue system

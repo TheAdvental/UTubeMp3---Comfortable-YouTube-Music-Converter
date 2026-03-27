@@ -28,9 +28,16 @@
     <main class="container">
         <!-- Search Section -->
         <section id="section-search" class="section active">
-            <div class="search-box glass">
+            <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: #cbd5e1; font-weight: 500;" data-i18n="searchByUrlTitle">Search by URL</h3>
+            <div class="search-box glass" id="url-search-box">
+                <input type="text" id="url-search-input" data-i18n-placeholder="searchPlaceholderUrl" placeholder="Paste YouTube link here...">
+                <button id="url-search-btn" data-i18n="searchBtn">Search</button>
+            </div>
+
+            <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: #cbd5e1; font-weight: 500;" data-i18n="searchByInfoTitle">Search by Track Information</h3>
+            <div class="search-box glass" id="info-search-box">
                 <select id="search-type" style="background: transparent; color: white; border: none; outline: none; padding: 0 1rem; border-right: 1px solid var(--glass-border); font-size: 1rem; font-weight: 600; cursor: pointer;">
-                    <option value="artists" style="color: black;" data-i18n="artists">Artists</option>
+                    <option value="artists" style="color: black;" data-i18n="artists" selected>Artists</option>
                     <option value="songs" style="color: black;" data-i18n="songs">Tracks</option>
                     <option value="albums" style="color: black;" data-i18n="albums">Albums</option>
                 </select>
@@ -38,15 +45,15 @@
                 <button id="search-btn" data-i18n="searchBtn">Search</button>
             </div>
             
+            <div class="loader" id="search-loader" style="display: none;"></div>
+            
+            <div id="search-results" class="grid-results" style="margin-bottom: 2rem;">
+                <!-- Search results will go here -->
+            </div>
+
             <div id="recent-searches-container" style="display: none; margin-bottom: 2rem;">
                 <h3 style="margin-bottom: 1rem;" data-i18n="recentSearches">Recent Searches</h3>
                 <div id="recent-searches" class="grid-results"></div>
-            </div>
-            
-            <div class="loader" id="search-loader" style="display: none;"></div>
-            
-            <div id="search-results" class="grid-results">
-                <!-- Artists cards will go here -->
             </div>
         </section>
 
@@ -91,6 +98,9 @@
                     <h2 id="album-title">Album Title</h2>
                     <p id="album-desc">Author / Year</p>
                     <button id="download-album-btn" class="download-btn" style="margin-top: 1rem;" data-i18n="downloadEntireAlbum">⬇ Download entire album</button>
+                    <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                        <button id="multi-select-album-btn" class="toggle-select-btn" data-i18n="multiSelectMode">Select Multiple</button>
+                    </div>
                 </div>
             </div>
             
@@ -104,7 +114,12 @@
 
         <!-- History/Library Section -->
         <section id="section-history" class="section glass" style="display: none;">
-            <h2 data-i18n="myMusicTitle">My Music (Downloaded)</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+                <h2 data-i18n="myMusicTitle" style="margin: 0;">My Music (Downloaded)</h2>
+                <div style="display: flex; gap: 1rem;">
+                    <button id="multi-select-history-btn" class="toggle-select-btn" data-i18n="multiSelectMode">Select Multiple</button>
+                </div>
+            </div>
             <div class="loader" id="history-loader" style="display: none;"></div>
             <div id="history-results" class="list-container">
                 <!-- Downloaded songs will go here -->
@@ -114,6 +129,24 @@
 
     <!-- Downloads Progress Toast Area -->
     <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Download Queue Area -->
+    <div id="queue-container" class="queue-container glass">
+        <div class="queue-header" id="queue-header">
+            <div class="queue-info">
+                <span id="queue-count">0 tracks downloading</span>
+                <div class="queue-progress-bar">
+                    <div class="queue-progress-fill" id="queue-progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+            <button id="queue-toggle-btn">&#9650;</button>
+        </div>
+        <div class="queue-list" id="queue-list" style="display: none;">
+            <!-- Queue items go here -->
+        </div>
+    </div>
+
+    </div>
 
     <script src="app.js"></script>
 </body>

@@ -111,3 +111,26 @@ def get_progress(video_id: str):
 def get_download_history(db: Session = Depends(get_db)):
     songs = db.query(DownloadedSong).order_by(desc(DownloadedSong.downloaded_at)).all()
     return songs
+
+from pydantic import BaseModel
+from typing import List
+
+class DeleteSongsRequest(BaseModel):
+    video_ids: List[str]
+
+@router.delete("/history")
+def delete_history_items(req: DeleteSongsRequest, db: Session = Depends(get_db)):
+    deleted = 0
+    errors = []
+    for vid in req.video_ids:
+        song = db.query(DownloadedSong).filter(DownloadedSong.video_id == vid).first()
+        if song:
+            if song.file_path and os.path.exists(song.file_path):
+                try:
+                    os.remove(song.file_path)
+                except Exception as e:
+                    errors.append(f"Failed to delete {song.file_path}: {e}")
+            db.delete(song)
+            deleted += 1
+    db.commit()
+    return {"deleted": deleted, "errors": errors}
