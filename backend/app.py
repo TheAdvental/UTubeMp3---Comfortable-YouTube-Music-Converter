@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.youtube import router as youtube_router
 from api.downloader import router as downloader_router
+from api.spotify import router as spotify_router
 from db.database import Base, engine
 
 # Ensure database tables exist
@@ -22,6 +23,7 @@ app.add_middleware(
 
 app.include_router(youtube_router, prefix="/api/youtube", tags=["youtube"])
 app.include_router(downloader_router, prefix="/api/downloader", tags=["downloader"])
+app.include_router(spotify_router, prefix="/api/spotify", tags=["spotify"])
 
 # Mount frontend files at root
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")

@@ -1,0 +1,16 @@
+services:
+  utube:
+    build: .
+    container_name: utube-mp3
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/data
+      - DOWNLOADS_DIR=/data/downloads
+      - DB_PATH=/data/downloads.db
+    volumes:
+      # Persistent storage: downloaded music + SQLite database
+      - ./data:/data

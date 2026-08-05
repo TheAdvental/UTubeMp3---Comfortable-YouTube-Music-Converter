@@ -1,31 +1,109 @@
-# UTubeMp3 - Comfortable YouTube Music Converter
+# 🎵 UTubeMp3 — Comfortable YouTube Music Converter
 
-***"Good morning, afternoon, or evening (right now it's 1:53 AM for me). This is a solution to my painful problem (downloading music) vibecoded in an hour. I needed to solve the problem of downloading large volumes of music as quickly as possible, so I added the ability to download entire albums at once. But that's not the point, I hope this site will be as useful to someone else as it was to me in its time. I might update this product in the future, although I'm satisfied with it in its current form (except for a few minor details). Alright, I'm going to sleep, I'm tired of writing this text. In the meantime, here is a tutorial from Gemini 3.1 Pro for running this site."***
+A beautiful web application for downloading music from YouTube Music, with Spotify catalog search, playlist and album browsing.
 
 ---
 
-## Tutorial by Gemini 3.1 Pro 🚀
+## ✨ Features
 
-Welcome to **UTubeMp3**! This application uses a sleek frontend interface and a fast Python backend to fetch, search, and seamlessly convert YouTube Music tracks directly into local MP3 files. 
+- 🔍 **YouTube Music search** — find songs, artists, albums
+- 🎵 **Spotify search** — browse Spotify catalog and download tracks via YouTube
+- 📋 **Spotify playlists & albums** — open by URL and download all tracks
+- 🎤 **Artist pages** — browse discography
+- 📚 **Download history** — library of all downloaded tracks
+- 🏷️ **Smart naming** — files saved as `Artist - Title.mp3`
 
-Follow these simple steps to launch your music downloader locally on your Windows machine.
+---
 
-### Prerequisites
-1. **Python**: Ensure you have Python installed on your computer.
-2. **FFmpeg**: You must have `ffmpeg` installed to handle the audio conversion process. 
-   - You can either install it globally and add it to your system's `PATH`.
-   - Or, simply download `ffmpeg.exe` and place it directly inside this project's root folder.
+## 🚀 Run Locally (Windows)
 
-### Installation
-Double-click and run the `install.bat` script. This simple script will automatically:
-- Set up an isolated Python virtual environment (`venv`).
-- Activate the environment.
-- Install all necessary backend packages listed in `requirements.txt`.
+```bash
+# Just double-click:
+run.bat
+```
 
-### Running the Application
-Whenever you want to use the downloader, just double-click `run.bat`.
-1. It will boot up the Python FastAPI backend server locally on port `8000`.
-2. Once the backend is running, open the `frontend/index.html` file in your preferred web browser to access the website.
-3. Start searching your favorite artists, browse their albums, and build your MP3 library!
+App opens at `http://localhost:8000`
 
-*(Note: All your converted MP3s will magically appear inside the `downloads` folder for your convenience!)*
+---
+
+## 🐳 Deploy with Docker (Linux Server)
+
+### 1. Install Docker on your server
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+### 2. Clone the repo
+
+```bash
+git clone https://github.com/YOUR_USERNAME/UTubeMp3.git
+cd UTubeMp3
+```
+
+### 3. Create `.env` file
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Fill in your values:
+```env
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_REDIRECT_URI=http://192.168.1.100:8000/api/spotify/callback
+#                    ↑ use your server's local IP or public IP/domain
+```
+
+> 💡 **Get Spotify credentials**: [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+> — Create an app → note Client ID & Secret
+
+### 4. Build and start
+
+```bash
+docker compose up -d --build
+```
+
+App is running at `http://YOUR_SERVER_IP:8000`
+
+### 5. Set up Spotify OAuth (for playlists)
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+2. Click your app → **Edit Settings**
+3. Under **Redirect URIs** → Add your `SPOTIFY_REDIRECT_URI` value → **Save**
+4. Open the app → click **🔗 Підключити Spotify** → authorize
+
+### Useful commands
+
+```bash
+docker compose logs -f        # view logs
+docker compose down           # stop
+docker compose up -d          # start
+docker compose up -d --build  # rebuild after code changes
+```
+
+Downloaded music is stored in `./data/downloads/` on the host.
+
+---
+
+## ⚙️ Configuration
+
+| Env Variable | Description | Default |
+|---|---|---|
+| `SPOTIFY_CLIENT_ID` | Spotify app client ID | *(required)* |
+| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret | *(required)* |
+| `SPOTIFY_REDIRECT_URI` | OAuth callback URL | `http://127.0.0.1:8000/api/spotify/callback` |
+| `DOWNLOADS_DIR` | Where MP3 files are saved | `/data/downloads` |
+| `DB_PATH` | SQLite database path | `/data/downloads.db` |
+
+---
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python, FastAPI, yt-dlp, spotipy, ytmusicapi
+- **Frontend**: Vanilla HTML/CSS/JavaScript
+- **Database**: SQLite
+- **Container**: Docker + docker-compose

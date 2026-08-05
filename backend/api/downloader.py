@@ -1,15 +1,15 @@
 import os
+import re
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from db.database import get_db, DownloadedSong
+from config import DOWNLOADS_DIR
 import yt_dlp
 
 router = APIRouter()
 
-# Downloads folder
-DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 # In-memory dictionary to track progress
@@ -40,7 +40,7 @@ def sanitize_filename(name):
 def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: Session):
     safe_title = sanitize_filename(title)
     safe_artist = sanitize_filename(artist)
-    target_filename = f"{safe_title} - {safe_artist}"
+    target_filename = f"{safe_artist} - {safe_title}"
     
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -67,9 +67,11 @@ def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: S
             final_path = base + ".mp3"
             
             # Use provided title/artist or fallback to info
-            final_title = title if title else info.get('title')
-            final_artist = artist if artist else info.get('uploader')
-            final_thumbnail = thumbnail if thumbnail else info.get('thumbnail')
+            # Strip any extension from the fallback title (yt-dlp sometimes includes it)
+            raw_title = title if title else info.get('title', '')
+            final_title = re.sub(r'\.(mp3|m4a|webm|ogg|flac|wav|opus)$', '', raw_title, flags=re.IGNORECASE).strip()
+            final_artist = artist if artist else info.get('uploader', '')
+            final_thumbnail = thumbnail if thumbnail else info.get('thumbnail', '')
             
             db_song = DownloadedSong(
                 video_id=video_id,

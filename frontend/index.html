@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="title">UTubeMp3 - Music Downloader</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260805b">
 </head>
 <body>
     <div class="blob blob-1"></div>
@@ -17,6 +17,10 @@
         </div>
         <div class="nav-links">
             <button class="nav-btn active" id="nav-search" data-i18n="searchTab">Search</button>
+            <button class="nav-btn spotify-nav-btn" id="nav-spotify">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:inline;vertical-align:middle;margin-right:5px;"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                Spotify
+            </button>
             <button class="nav-btn" id="nav-history" data-i18n="historyTab">My Music</button>
             <div class="lang-switcher">
                 <button class="lang-btn active" data-lang="en">EN</button>
@@ -125,6 +129,114 @@
                 <!-- Downloaded songs will go here -->
             </div>
         </section>
+
+        <!-- Spotify Main Section -->
+        <section id="section-spotify" class="section active" style="display: none;">
+            <!-- Spotify credentials warning banner -->
+            <div id="spotify-creds-warning" class="spotify-creds-banner" style="display:none;">
+                <div class="spotify-creds-icon">⚠️</div>
+                <div>
+                    <strong data-i18n="spotifyCredsTitle">Spotify API not configured</strong><br>
+                    <span data-i18n="spotifyCredsDesc">Add your Client ID and Secret in <code>backend/config.py</code> to enable Spotify features.</span>
+                    <br><a href="https://developer.spotify.com/dashboard" target="_blank" style="color:#1DB954;">developer.spotify.com/dashboard →</a>
+                </div>
+            </div>
+
+            <!-- Spotify OAuth login banner (shown by default, hidden only when credentials missing) -->
+            <div id="spotify-login-banner" class="spotify-login-banner">
+                <div class="spotify-login-left" style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.4rem;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                        <strong id="spotify-login-title" style="font-size:0.95rem;">Підключіть Spotify для відкриття плейлистів</strong>
+                        <span id="spotify-login-status" style="display:none; color:#1DB954; font-size:0.85rem;">✓ Підключено</span>
+                    </div>
+                    <span id="spotify-login-desc" style="font-size:0.8rem; opacity:0.75; line-height:1.5;">
+                        Альбоми й артисти — без входу. Для <strong>плейлистів</strong> потрібен разовий вхід.<br>
+                        <span id="spotify-setup-steps">
+                            Спочатку: <a href="https://developer.spotify.com/dashboard" target="_blank" style="color:#1DB954;">developer.spotify.com/dashboard</a>
+                            → Ваш додаток → <em>Edit Settings</em> → <em>Redirect URIs</em> → додайте
+                            <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:3px;">http://localhost:8000/api/spotify/callback</code>
+                            → Save. Потім натисніть "Підключити".
+                        </span>
+                    </span>
+                </div>
+                <div style="display:flex; gap:0.5rem; align-items:center; flex-shrink:0; margin-top:0.25rem;">
+                    <button id="spotify-login-btn" class="spotify-connect-btn" onclick="window.location.href='/api/spotify/login'">🔗 Підключити Spotify</button>
+                    <button id="spotify-logout-btn" class="spotify-logout-btn" style="display:none;" onclick="spotifyLogout()">Від'єднати</button>
+                </div>
+            </div>
+
+            <!-- Spotify URL input -->
+            <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: #cbd5e1; font-weight: 500;" data-i18n="spotifyUrlTitle">Open Spotify Playlist / Album</h3>
+            <div class="search-box glass spotify-url-box" id="spotify-url-box">
+                <span class="spotify-icon-sm">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                </span>
+                <input type="text" id="spotify-url-input" data-i18n-placeholder="spotifyUrlPlaceholder" placeholder="Paste Spotify playlist or album link...">
+                <button id="spotify-url-btn" class="spotify-btn" data-i18n="openBtn">Open</button>
+            </div>
+
+            <!-- Spotify search -->
+            <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: #cbd5e1; font-weight: 500;" data-i18n="spotifySearchTitle">Search Spotify Catalog</h3>
+            <div class="search-box glass" id="spotify-search-box">
+                <select id="spotify-search-type" style="background: transparent; color: white; border: none; outline: none; padding: 0 1rem; border-right: 1px solid var(--glass-border); font-size: 1rem; font-weight: 600; cursor: pointer;">
+                    <option value="track" style="color: black;" data-i18n="tracks" selected>Tracks</option>
+                    <option value="artist" style="color: black;" data-i18n="artists">Artists</option>
+                    <option value="album" style="color: black;" data-i18n="albums">Albums</option>
+                    <option value="playlist" style="color: black;" data-i18n="playlists">Playlists</option>
+                </select>
+                <input type="text" id="spotify-search-input" data-i18n-placeholder="spotifySearchPlaceholder" placeholder="Search Spotify...">
+                <button id="spotify-search-btn" class="spotify-btn" data-i18n="searchBtn">Search</button>
+            </div>
+
+            <div class="loader" id="spotify-search-loader" style="display: none;"></div>
+            <div id="spotify-search-results" class="grid-results" style="margin-bottom: 2rem;"></div>
+        </section>
+
+        <!-- Spotify Playlist / Album View -->
+        <section id="section-spotify-playlist" class="section glass" style="display: none;">
+            <button class="back-btn" id="back-to-spotify" data-i18n="backToSpotify">← Back to Spotify</button>
+            <div class="artist-header">
+                <img id="spotify-pl-img" src="" alt="Playlist">
+                <div class="artist-info">
+                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                        <span style="color:#1DB954; font-size:0.85rem; font-weight:600;" data-i18n="fromSpotify">FROM SPOTIFY</span>
+                    </div>
+                    <h2 id="spotify-pl-title">Playlist Name</h2>
+                    <p id="spotify-pl-desc" style="color:#94a3b8;"></p>
+                    <button id="download-spotify-pl-btn" class="download-btn spotify-download-btn" style="margin-top: 1rem;" data-i18n="downloadEntirePlaylist">⬇ Download all tracks</button>
+                    <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                        <button id="multi-select-spotify-btn" class="toggle-select-btn" data-i18n="multiSelectMode">Select Multiple</button>
+                    </div>
+                </div>
+            </div>
+            <div class="loader" id="spotify-pl-loader" style="display: none;"></div>
+            <div class="column">
+                <h3 id="spotify-pl-tracks-title" data-i18n="playlistTracks">Playlist tracks</h3>
+                <div id="spotify-pl-tracks" class="list-container"></div>
+            </div>
+        </section>
+
+        <!-- Spotify Artist View -->
+        <section id="section-spotify-artist" class="section glass" style="display: none;">
+            <button class="back-btn" id="back-to-spotify-from-artist" data-i18n="backToSpotify">← Back to Spotify</button>
+            <div class="artist-header">
+                <img id="spotify-artist-img" src="" alt="Artist">
+                <div class="artist-info">
+                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                        <span style="color:#1DB954; font-size:0.85rem; font-weight:600;" data-i18n="fromSpotify">FROM SPOTIFY</span>
+                    </div>
+                    <h2 id="spotify-artist-name">Artist Name</h2>
+                    <p id="spotify-artist-meta" style="color:#94a3b8;"></p>
+                </div>
+            </div>
+            <div class="column" style="margin-top:1.5rem;">
+                <h3 data-i18n="albumsTitle">Albums</h3>
+                <div id="spotify-artist-albums" class="grid-albums"></div>
+            </div>
+        </section>
     </main>
 
     <!-- Downloads Progress Toast Area -->
@@ -148,6 +260,6 @@
 
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=20260805b"></script>
 </body>
 </html>
