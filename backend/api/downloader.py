@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from db.database import get_db, DownloadedSong
@@ -113,6 +114,22 @@ def get_progress(video_id: str):
 def get_download_history(db: Session = Depends(get_db)):
     songs = db.query(DownloadedSong).order_by(desc(DownloadedSong.downloaded_at)).all()
     return songs
+
+@router.get("/file/{video_id}")
+def download_file(video_id: str, db: Session = Depends(get_db)):
+    """Stream the downloaded MP3 file to the client's browser for saving."""
+    song = db.query(DownloadedSong).filter(DownloadedSong.video_id == video_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found in library")
+    if not song.file_path or not os.path.exists(song.file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    filename = os.path.basename(song.file_path)
+    return FileResponse(
+        path=song.file_path,
+        media_type="audio/mpeg",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 from pydantic import BaseModel
 from typing import List

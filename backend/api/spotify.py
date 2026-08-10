@@ -15,9 +15,13 @@ except ImportError:
 
 router = APIRouter()
 
+# Base URL of the app — used for post-OAuth redirect back to the UI.
+# In Docker set APP_BASE_URL=http://your-server-ip:8000 in .env
+APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
+
 SPOTIFY_REDIRECT_URI = os.getenv(
     "SPOTIFY_REDIRECT_URI",
-    "http://127.0.0.1:8000/api/spotify/callback"  # local dev default
+    f"{APP_BASE_URL}/api/spotify/callback"  # falls back to APP_BASE_URL
 )
 SPOTIFY_SCOPE = "playlist-read-private playlist-read-collaborative"
 
@@ -126,13 +130,13 @@ def spotify_login():
 def spotify_callback(code: str = None, error: str = None):
     """Handle Spotify OAuth callback."""
     if error or not code:
-        return RedirectResponse("http://localhost:8000/#spotify?error=access_denied")
+        return RedirectResponse(f"{APP_BASE_URL}/#spotify?error=access_denied")
     try:
         token_info = _make_oauth().get_access_token(code, as_dict=True)
         _user_token["info"] = token_info
-        return RedirectResponse("http://localhost:8000/#spotify")
+        return RedirectResponse(f"{APP_BASE_URL}/#spotify")
     except Exception as e:
-        return RedirectResponse(f"http://localhost:8000/#spotify?error={str(e)[:100]}")
+        return RedirectResponse(f"{APP_BASE_URL}/#spotify?error={str(e)[:100]}")
 
 @router.get("/auth-status")
 def auth_status():

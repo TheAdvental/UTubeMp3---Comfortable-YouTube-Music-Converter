@@ -68,6 +68,7 @@ const TRANSLATIONS = {
         deleteSuccess: "Successfully deleted selected items.",
         deleteFailed: "Failed to delete.",
         multiSelectMode: "Select Multiple",
+        saveToDevice: "💾 Save to device",
         // Spotify
         spotifyTab: "Spotify",
         spotifyUrlTitle: "Open Spotify Playlist / Album",
@@ -158,6 +159,7 @@ const TRANSLATIONS = {
         deleteSuccess: "Успішно видалено.",
         deleteFailed: "Не вдалося видалити.",
         multiSelectMode: "Вибрати декілька",
+        saveToDevice: "💾 Зберегти на пристрій",
         // Spotify
         spotifyTab: "Spotify",
         spotifyUrlTitle: "Відкрити плейлист / альбом Spotify",
@@ -898,6 +900,13 @@ function pollProgress(videoId, title) {
                 
                 if (data.status === 'completed') {
                     showToast(t('success'), `${title} ${t('downloadSuccessMsg')}`, 'success');
+                    // Auto-trigger browser download so the file is also saved to the user's device
+                    const a = document.createElement('a');
+                    a.href = `${API_URL}/downloader/file/${videoId}`;
+                    a.download = '';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
                 } else {
                     showToast(t('error'), `${t('downloadErrorMsg')} ${title}`, 'error');
                 }
@@ -941,7 +950,11 @@ async function loadHistory() {
                     <p>${song.artist} • ${t('downloadedAtStr')} ${dateStr}</p>
                     <p style="font-size:0.75rem; color:#64748b; margin-top: 4px;">${t('fileStr')} ${song.file_path}</p>
                 </div>
-                <button class="action-btn delete-btn" style="margin-left: 1rem;" onclick="deleteSongs(['${song.video_id}'])">🗑</button>
+                <a href="${API_URL}/downloader/file/${song.video_id}" download
+                   style="margin-left: 0.5rem; text-decoration: none;">
+                    <button class="action-btn" style="background: var(--primary); color: white;">${t('saveToDevice')}</button>
+                </a>
+                <button class="action-btn delete-btn" style="margin-left: 0.5rem;" onclick="deleteSongs(['${song.video_id}'])">🗑</button>
             `;
             historyResults.appendChild(div);
         });
