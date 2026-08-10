@@ -11,8 +11,7 @@ services:
       - DATA_DIR=/data
       - DOWNLOADS_DIR=/data/downloads
       - DB_PATH=/data/downloads.db
-      # Set this to your server's public IP or domain (port 8090):
-      - APP_BASE_URL=http://YOUR_SERVER_IP:8090
+      # APP_BASE_URL and Spotify credentials come from the .env file — do NOT set them here.
     volumes:
       # Persistent storage: downloaded music + SQLite database
       - ./data:/data
