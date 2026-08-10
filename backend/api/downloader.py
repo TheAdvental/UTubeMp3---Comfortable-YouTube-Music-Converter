@@ -1,6 +1,7 @@
 import os
 import re
 import asyncio
+import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -124,11 +125,13 @@ def download_file(video_id: str, db: Session = Depends(get_db)):
     if not song.file_path or not os.path.exists(song.file_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
     filename = os.path.basename(song.file_path)
+    # Use RFC 5987 encoding so non-ASCII (e.g. Cyrillic) names work in all browsers
+    encoded = urllib.parse.quote(filename, safe='')
+    content_disposition = f"attachment; filename*=UTF-8''{encoded}"
     return FileResponse(
         path=song.file_path,
         media_type="audio/mpeg",
-        filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": content_disposition},
     )
 
 from pydantic import BaseModel

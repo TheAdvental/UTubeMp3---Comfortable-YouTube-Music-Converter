@@ -900,13 +900,17 @@ function pollProgress(videoId, title) {
                 
                 if (data.status === 'completed') {
                     showToast(t('success'), `${title} ${t('downloadSuccessMsg')}`, 'success');
-                    // Auto-trigger browser download so the file is also saved to the user's device
-                    const a = document.createElement('a');
-                    a.href = `${API_URL}/downloader/file/${videoId}`;
-                    a.download = '';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    // Auto-trigger browser download so the file is also saved to the user's device.
+                    // Small delay ensures the server has fully flushed the file before streaming it.
+                    setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = `${API_URL}/downloader/file/${videoId}`;
+                        // Set explicit .mp3 extension so Chrome never saves it as .txt
+                        a.download = `${title}.mp3`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }, 300);
                 } else {
                     showToast(t('error'), `${t('downloadErrorMsg')} ${title}`, 'error');
                 }
