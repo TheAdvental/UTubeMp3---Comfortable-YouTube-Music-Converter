@@ -9,6 +9,7 @@ from sqlalchemy import desc
 from db.database import get_db, DownloadedSong
 from config import DOWNLOADS_DIR
 import yt_dlp
+from mutagen.id3 import ID3, TIT2, TPE2, ID3NoHeaderError
 
 router = APIRouter()
 
@@ -38,6 +39,19 @@ def sanitize_filename(name):
     for char in invalid_chars:
         name = name.replace(char, '')
     return name
+
+def tag_mp3(file_path: str, title: str, artist: str):
+    """Write Title and Album Artist ID3 tags to an MP3 file."""
+    try:
+        try:
+            tags = ID3(file_path)
+        except ID3NoHeaderError:
+            tags = ID3()
+        tags["TIT2"] = TIT2(encoding=3, text=title)   # Title
+        tags["TPE2"] = TPE2(encoding=3, text=artist)   # Album artist
+        tags.save(file_path, v2_version=3)
+    except Exception as e:
+        print(f"[tag_mp3] Could not write tags to {file_path}: {e}")
 
 def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: Session):
     safe_title = sanitize_filename(title)
@@ -91,6 +105,9 @@ def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: S
             else:
                 db.add(db_song)
             db.commit()
+
+            # Write ID3 tags (Title + Album Artist) to the MP3 file
+            tag_mp3(final_path, final_title, final_artist)
 
             download_progress[video_id] = {"status": "completed", "progress": "100%"}
             
