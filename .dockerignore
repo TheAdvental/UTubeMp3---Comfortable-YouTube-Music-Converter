@@ -1,0 +1,8 @@
+# Only backend/, frontend/ and requirements.txt are needed in the image
+*
+!backend/
+!frontend/
+!requirements.txt
+**/__pycache__
+**/*.py[cod]
+**/.cache

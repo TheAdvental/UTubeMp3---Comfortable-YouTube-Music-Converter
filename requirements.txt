@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
 ytmusicapi
-yt-dlp
+# [default] pulls in yt-dlp-ejs, needed (together with Deno/Node.js) to get past YouTube's JS challenges
+yt-dlp[default]
 sqlalchemy
 aiofiles
 spotipy

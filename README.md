@@ -1,109 +1,128 @@
 # 🎵 UTubeMp3 — Comfortable YouTube Music Converter
 
-A beautiful web application for downloading music from YouTube Music, with Spotify catalog search, playlist and album browsing.
-
----
+A web app for downloading music from YouTube Music as MP3, with optional Spotify catalog search (Spotify tracks are matched to YouTube Music and downloaded from there).
 
 ## ✨ Features
 
-- 🔍 **YouTube Music search** — find songs, artists, albums
-- 🎵 **Spotify search** — browse Spotify catalog and download tracks via YouTube
-- 📋 **Spotify playlists & albums** — open by URL and download all tracks
-- 🎤 **Artist pages** — browse discography
-- 📚 **Download history** — library of all downloaded tracks
-- 🏷️ **Smart naming** — files saved as `Artist - Title.mp3`
+- 🔍 **YouTube Music search**: songs, artists, albums, or paste a link
+- 🎤 **Artist pages**: tracks, albums and singles
+- 💿 **Albums**: download a whole album, or select several tracks
+- 🎵 **Spotify** *(optional)*: search, open albums/playlists by link, download via YouTube Music
+- 📚 **My Music**: library of downloaded tracks; save to device, re-download, delete
+- 🏷️ Files named `Artist - Title.mp3`, 192 kbps, with ID3 tags
+- 🌐 English / Ukrainian UI
+
+The same code runs in two ways:
+
+| | **Local (Windows)** | **Docker (server)** |
+|---|---|---|
+| Start | `local\run.bat` | `docker compose -f docker/docker-compose.yml up -d --build` |
+| Settings | `.env` in the project root | `docker/.env` |
+| MP3 files | `downloads\` folder | `/data/downloads` in the `utube_data` volume |
+| After a download | file is in `downloads\` | browser also downloads the MP3 to your device |
 
 ---
 
-## 🚀 Run Locally (Windows)
+## 🖥️ Local (Windows)
 
-```bash
-# Just double-click:
-run.bat
+### Requirements
+
+```bat
+winget install Python.Python.3.12
+winget install Gyan.FFmpeg
+winget install DenoLand.Deno
 ```
 
-App opens at `http://localhost:8000`
+- **Python 3.10+**
+- **FFmpeg**: converts audio to MP3
+- **Deno** *(or Node.js)*: yt-dlp needs a JavaScript runtime to solve YouTube's challenges. **Without it YouTube refuses downloads with `HTTP Error 403`.** If Node.js is already installed, that works too.
+
+Reopen the terminal/Explorer window after installing so the new PATH is picked up.
+
+### Install & run
+
+1. Double-click **`local\install.bat`** (once). It creates `venv\` and `.env`.
+2. Double-click **`local\run.bat`**. The app opens at <http://127.0.0.1:8000>.
+
+`run.bat` rebuilds the venv by itself if Python was moved or updated, and updates `yt-dlp` on every start (YouTube changes often, and an outdated yt-dlp is the most common reason downloads stop working).
 
 ---
 
-## 🐳 Deploy with Docker (Linux Server)
+## 🐳 Docker (server)
 
-### 1. Install Docker on your server
-
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# Log out and back in
-```
-
-### 2. Clone the repo
+The image includes FFmpeg and Deno, so nothing else is needed on the host.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/UTubeMp3.git
-cd UTubeMp3
+git clone https://github.com/TheAdvental/UTubeMp3---Comfortable-YouTube-Music-Converter.git utube
+cd utube
+
+cp docker/.env.example docker/.env     # optional: Spotify, port, etc.
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-### 3. Create `.env` file
+The app runs at `http://SERVER_IP:8000`.
 
 ```bash
-cp .env.example .env
-nano .env
+docker compose -f docker/docker-compose.yml logs -f          # logs
+docker compose -f docker/docker-compose.yml down             # stop
+docker compose -f docker/docker-compose.yml up -d --build    # update after git pull (also updates yt-dlp)
 ```
 
-Fill in your values:
-```env
-SPOTIFY_CLIENT_ID=your_client_id
-SPOTIFY_CLIENT_SECRET=your_client_secret
-SPOTIFY_REDIRECT_URI=http://192.168.1.100:8000/api/spotify/callback
-#                    ↑ use your server's local IP or public IP/domain
-```
+**Data** (MP3s + database) lives in the `utube-mp3_utube_data` volume. To keep it in a host folder instead, set `DATA_PATH=./data` in `docker/.env` and create the folder with `mkdir -p docker/data && sudo chown 1000:1000 docker/data` (the container runs as uid 1000).
 
-> 💡 **Get Spotify credentials**: [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-> — Create an app → note Client ID & Secret
+Rebuild the image every now and then (`up -d --build`) to get a fresh yt-dlp.
 
-### 4. Build and start
+---
 
-```bash
-docker compose up -d --build
-```
+## 🍪 YouTube cookies (if downloads fail with "Sign in to confirm you're not a bot")
 
-App is running at `http://YOUR_SERVER_IP:8000`
+YouTube sometimes blocks an IP for a while, especially servers or after many downloads in a row (errors mentioning *bot*, or HTTP 429). Waiting usually helps. If it keeps happening, give yt-dlp cookies from a logged-in browser:
 
-### 5. Set up Spotify OAuth (for playlists)
+1. Export YouTube cookies in Netscape format (see [yt-dlp: exporting YouTube cookies](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies)). Using a secondary Google account is recommended.
+2. Put the file at:
+   - **Local:** `cookies.txt` in the project root
+   - **Docker:** `docker cp cookies.txt utube-mp3:/data/cookies.txt && docker restart utube-mp3`
 
-1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-2. Click your app → **Edit Settings**
-3. Under **Redirect URIs** → Add your `SPOTIFY_REDIRECT_URI` value → **Save**
-4. Open the app → click **🔗 Підключити Spotify** → authorize
+The file is picked up automatically; `/api/health` shows `"cookies": true`. `cookies.txt` is in `.gitignore`. **Never commit it**: it gives access to your Google account.
 
-### Useful commands
+---
 
-```bash
-docker compose logs -f        # view logs
-docker compose down           # stop
-docker compose up -d          # start
-docker compose up -d --build  # rebuild after code changes
-```
+## 🎵 Spotify (optional)
 
-Downloaded music is stored in `./data/downloads/` on the host.
+1. Create an app at <https://developer.spotify.com/dashboard> and copy its Client ID and Client Secret.
+2. Put them into `.env` (local) or `docker/.env` (Docker):
+   ```env
+   SPOTIFY_CLIENT_ID=...
+   SPOTIFY_CLIENT_SECRET=...
+   ```
+3. Restart the app. Search, albums and artists work right away.
+4. **Playlists** need a one-time "Connect Spotify" login. In the Spotify app settings add the Redirect URI shown in the app's Spotify tab:
+   - **Local:** `http://127.0.0.1:8000/api/spotify/callback` (Spotify no longer accepts `localhost`; open the app at `127.0.0.1`)
+   - **Docker, other devices:** Spotify requires HTTPS here. Use the built-in ngrok tunnel: set `NGROK_AUTHTOKEN`, `NGROK_DOMAIN` and `APP_BASE_URL=https://<NGROK_DOMAIN>` in `docker/.env`, then start with `--profile ngrok`.
 
 ---
 
 ## ⚙️ Configuration
 
-| Env Variable | Description | Default |
+| Variable | Default (local / Docker) | Description |
 |---|---|---|
-| `SPOTIFY_CLIENT_ID` | Spotify app client ID | *(required)* |
-| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret | *(required)* |
-| `SPOTIFY_REDIRECT_URI` | OAuth callback URL | `http://127.0.0.1:8000/api/spotify/callback` |
-| `DOWNLOADS_DIR` | Where MP3 files are saved | `/data/downloads` |
-| `DB_PATH` | SQLite database path | `/data/downloads.db` |
+| `DOWNLOADS_DIR` | `downloads\` / `/data/downloads` | Where MP3 files are saved |
+| `DB_PATH` | `downloads.db` / `/data/downloads.db` | SQLite database |
+| `AUTO_BROWSER_DOWNLOAD` | `false` / `true` | Also send each finished MP3 to the browser |
+| `MAX_CONCURRENT_DOWNLOADS` | `3` | Parallel downloads; the rest wait in a queue |
+| `YTDLP_JS_RUNTIME` | auto (`deno`, `node`, `bun`) | Force a JS runtime, e.g. `node` |
+| `YTDLP_COOKIES_FILE` | `cookies.txt` / `/data/cookies.txt` if present | YouTube cookies file |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | empty | Spotify app credentials |
+| `APP_BASE_URL` | `http://127.0.0.1:8000` | Public URL, used for the Spotify OAuth redirect |
+| `PORT`, `DATA_PATH` | `8000`, named volume | Docker only: host port / data location |
 
----
+## 🩺 Troubleshooting
 
-## 🛠️ Tech Stack
+- **Check the environment:** open <http://127.0.0.1:8000/api/health>. It should show `"ffmpeg": true` and a `js_runtime`.
+- **Smoke test** (any Python, no venv needed): `python smoke_test.py [URL] [--download]`
+- **`HTTP Error 403`**: no Deno/Node.js found, or yt-dlp is outdated (restart `run.bat` / rebuild the image).
+- **"Sign in to confirm you're not a bot" / 429**: see [YouTube cookies](#-youtube-cookies-if-downloads-fail-with-sign-in-to-confirm-youre-not-a-bot).
 
-- **Backend**: Python, FastAPI, yt-dlp, spotipy, ytmusicapi
-- **Frontend**: Vanilla HTML/CSS/JavaScript
-- **Database**: SQLite
-- **Container**: Docker + docker-compose
+## 🛠️ Tech stack
+
+FastAPI · yt-dlp + FFmpeg · ytmusicapi · spotipy · SQLite/SQLAlchemy · vanilla HTML/CSS/JS · Docker

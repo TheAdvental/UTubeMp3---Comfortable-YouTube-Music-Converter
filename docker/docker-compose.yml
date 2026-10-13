@@ -1,22 +1,46 @@
+# Run from the repository root:
+#   cp docker/.env.example docker/.env        # optional, then edit
+#   docker compose -f docker/docker-compose.yml up -d --build
+#
+# With the ngrok HTTPS tunnel (needed for Spotify login from other devices):
+#   docker compose -f docker/docker-compose.yml --profile ngrok up -d --build
+
+name: utube-mp3
+
 services:
   utube-mp3:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: utube-mp3:latest
     container_name: utube-mp3
+    restart: unless-stopped
     ports:
-      - "8000:8000"
-    volumes:
-      # Persistent storage: downloaded files and SQLite database
-      - utube_data:/data
+      - "${PORT:-8000}:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      APP_ENV: docker
+      DOWNLOADS_DIR: /data/downloads
+      DB_PATH: /data/downloads.db
+    volumes:
+      # Named volume by default. Set DATA_PATH=./data in docker/.env to keep the
+      # MP3s in a host folder instead (it must be writable by uid 1000).
+      - ${DATA_PATH:-utube_data}:/data
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: utube-ngrok
+    profiles: ["ngrok"]
     restart: unless-stopped
     environment:
-      - APP_ENV=docker
-      - DOWNLOADS_DIR=/data/downloads
-      - DB_PATH=/data/downloads.db
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    command: http --url=${NGROK_DOMAIN:-} utube-mp3:8000
+    depends_on:
+      - utube-mp3
+    ports:
+      - "4040:4040"   # ngrok web UI (tunnel status)
 
 volumes:
   utube_data:
-    driver: local

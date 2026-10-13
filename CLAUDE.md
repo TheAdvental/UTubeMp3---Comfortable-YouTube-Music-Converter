@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-A web app for downloading YouTube Music tracks and albums as MP3 files.  
-**Stack:** FastAPI (Python) backend + Vanilla HTML/CSS/JS frontend, SQLite for history, yt-dlp + FFmpeg for conversion.
+A web app for downloading YouTube Music tracks and albums as MP3 files, with optional Spotify search (Spotify tracks are resolved to YouTube Music and downloaded from there).
+**Stack:** FastAPI (Python) backend + Vanilla HTML/CSS/JS frontend, SQLite for history, yt-dlp + FFmpeg (+ Deno/Node.js for YouTube JS challenges) for conversion.
 
-Two deployment profiles:
-- **Local (Windows)** — runs via `run.bat`, serves at `http://localhost:8000`
-- **Docker (Server)** — runs via `docker compose`, data persisted in a named volume
+**One codebase, two deployment profiles.** `backend/` and `frontend/` are shared; the profiles differ only in launch scripts and environment variables. Never fork code per profile: add a setting in `backend/config.py` instead.
+- **Local (Windows)**: `local\run.bat`, config in `<root>/.env`, serves at `http://127.0.0.1:8000`
+- **Docker (server)**: `docker/`, config in `docker/.env`, data in the `utube_data` named volume
 
 ---
 
@@ -16,172 +16,107 @@ Two deployment profiles:
 ```
 .
 ├── backend/
-│   ├── app.py              # FastAPI app entry point
+│   ├── app.py              # FastAPI entry point, /api/health, /api/config, static mount
+│   ├── config.py           # ALL settings (env vars + <root>/.env loader), JS runtime / cookies detection
 │   ├── api/
 │   │   ├── youtube.py      # YouTube Music search/metadata endpoints
-│   │   └── downloader.py   # Download, progress tracking, history endpoints
+│   │   ├── downloader.py   # Download queue, progress, history, file streaming
+│   │   └── spotify.py      # Spotify search/albums/playlists/OAuth + resolve to YouTube
 │   └── db/
-│       └── database.py     # SQLAlchemy models + SQLite engine
-├── frontend/
-│   ├── index.html
-│   ├── app.js
-│   └── style.css
-├── docker/
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── .env.example
-├── downloads/              # Output folder for MP3 files (local)
-├── downloads.db            # SQLite DB (local)
-├── requirements.txt
-├── run.bat                 # One-click local runner (recreates venv if needed)
-└── install.bat             # First-time setup script
+│       └── database.py     # SQLAlchemy model + SQLite engine
+├── frontend/               # index.html, app.js, style.css, placeholder.svg
+├── local/                  # Local profile: install.bat, run.bat
+├── docker/                 # Docker profile: Dockerfile, docker-compose.yml, .env.example
+├── .env.example            # Local profile config template (copied to .env by install.bat)
+├── .dockerignore           # Build context is the repo root; only backend/, frontend/, requirements.txt
+├── smoke_test.py           # Stdlib-only smoke test against a running instance
+└── requirements.txt
 ```
+
+Ignored, local-only: `venv/`, `downloads/`, `downloads.db`, `.env`, `docker/.env`, `cookies.txt`.
 
 ---
 
-## Backend API
+## Backend API (`/api`)
 
-### Base URL
-`http://localhost:8000/api`
-
-### Routes
-
-#### `/api/youtube`
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/search?query=&filter=` | Search artists, songs, albums. `filter`: `artists`, `songs`, `albums` |
-| GET | `/song/{video_id}` | Get metadata for a specific song |
-| GET | `/artist/{browse_id}` | Get artist info + albums/songs/singles |
-| GET | `/artist/{browse_id}/albums?params=` | Get full album list for an artist |
-| GET | `/album/{browse_id}` | Get tracks for an album |
-| GET | `/playlist/{browse_id}` | Get tracks from a playlist (limit 100) |
+| GET | `/health` | `ffmpeg`, `js_runtime`, `cookies`, `app_env`: environment diagnostics + Docker healthcheck |
+| GET | `/config` | Profile flags for the frontend (`auto_browser_download`, `show_file_paths`) |
+| GET | `/youtube/search?query=&filter=` | `filter`: `artists`, `songs`, `albums` |
+| GET | `/youtube/song/{video_id}` | Metadata for one song (used by "search by URL") |
+| GET | `/youtube/artist/{browse_id}` | Artist info, songs, albums, singles + browseId/params for full lists |
+| GET | `/youtube/artist/{browse_id}/albums?params=` | Full album or singles list |
+| GET | `/youtube/album/{browse_id}` | Album tracks |
+| GET | `/youtube/playlist/{browse_id}` | Playlist tracks (limit 100) |
+| POST | `/downloader/download?video_id=&title=&artist=&thumbnail=` | Queue a download (title/artist/thumbnail optional) |
+| GET | `/downloader/progress/{video_id}` | `queued` / `starting` / `downloading` / `converting` / `completed` / `error` / `unknown` |
+| GET | `/downloader/history` | Library, newest first (incl. `file_exists`, `file_name`) |
+| GET | `/downloader/file/{video_id}` | Stream the MP3 to the browser |
+| DELETE | `/downloader/history` | Body `{"video_ids": [...]}`: deletes records + MP3 files |
+| GET | `/spotify/auth-status` | `configured`, `logged_in`, `redirect_uri`, `app_base_url` |
+| GET | `/spotify/search`, `/album/{id}`, `/artist/{id}`, `/playlist/{id}`, `/resolve` | Spotify catalog; playlists need OAuth (`/login` → `/callback`) |
 
-#### `/api/downloader`
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/download?video_id=&title=&artist=&thumbnail=` | Start background download |
-| GET | `/progress/{video_id}` | Poll download progress |
-| GET | `/history` | Get all downloaded songs (ordered newest first) |
-| DELETE | `/history` | Delete songs by `video_ids` list (also removes MP3 files) |
-
-### Download Flow
-1. `POST /api/downloader/download` — triggers a FastAPI `BackgroundTask`
-2. `yt-dlp` downloads best audio → FFmpeg converts to MP3 @ 192kbps
-3. File saved as `{title} - {artist}.mp3` in `DOWNLOADS_DIR`
-4. Progress tracked in-memory via `download_progress` dict (keyed by `video_id`)
-5. On completion, song is upserted into `downloaded_songs` SQLite table
-
----
-
-## Database
-
-**Engine:** SQLite via SQLAlchemy  
-**Model:** `DownloadedSong`
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | Integer PK | Auto |
-| `video_id` | String | Unique, indexed |
-| `title` | String | Indexed |
-| `artist` | String | |
-| `file_path` | String | Absolute path to MP3 |
-| `thumbnail` | String | Nullable, thumbnail URL |
-| `downloaded_at` | DateTime | Defaults to `utcnow` |
-
-**Path resolution:** `DB_PATH` env var (Docker) → project root `downloads.db` (local).  
-**Downloads dir:** `DOWNLOADS_DIR` env var (Docker) → project root `downloads/` (local).
+### Download flow
+1. `POST /download` validates `video_id`, skips if already in the DB **and** the file exists, reserves the id in `download_progress` (prevents double starts).
+2. Background task waits for a slot (`MAX_CONCURRENT_DOWNLOADS` semaphore) and opens **its own** DB session (the request session is closed by then).
+3. yt-dlp (with `js_runtimes` + optional `cookiefile`) downloads best audio, FFmpeg converts to MP3 192 kbps → `DOWNLOADS_DIR/{artist} - {title}.mp3` (adds ` [video_id]` on name clash).
+4. Upsert into `downloaded_songs`, write ID3 tags (TIT2, TPE1, TPE2).
 
 ---
 
-## Environment Variables
+## Configuration (`backend/config.py`)
 
-| Variable | Used in | Description |
-|----------|---------|-------------|
-| `DOWNLOADS_DIR` | `downloader.py` | Path to save MP3 files |
-| `DB_PATH` | `database.py` | Path to SQLite database file |
+| Variable | Local default | Docker default |
+|----------|---------------|----------------|
+| `APP_ENV` | `local` | `docker` |
+| `DOWNLOADS_DIR` / `DB_PATH` | `<root>/downloads`, `<root>/downloads.db` | `/data/downloads`, `/data/downloads.db` |
+| `AUTO_BROWSER_DOWNLOAD` | `false` | `true` |
+| `MAX_CONCURRENT_DOWNLOADS` | `3` | `3` |
+| `YTDLP_JS_RUNTIME` | auto: deno → node → bun on PATH | deno (in image) |
+| `YTDLP_COOKIES_FILE` | `<root>/cookies.txt` if present | `/data/cookies.txt` if present |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | empty (Spotify disabled) | empty |
+| `APP_BASE_URL` / `SPOTIFY_REDIRECT_URI` | `http://127.0.0.1:8000` / derived | same |
 
-See `docker/.env.example` for Docker-specific values.
+`<root>/.env` is loaded by `config.py` without overriding real env vars. **Never hardcode secrets** in code.
 
 ---
 
-## Running Locally (Windows)
+## Running
 
-### Prerequisites
-- **Python 3.10+** in PATH
-- **FFmpeg** in PATH (`winget install Gyan.FFmpeg`)
-
-### First run
 ```bat
-install.bat
-```
+:: Local (Windows)
+local\install.bat
+local\run.bat
 
-### Subsequent runs
-```bat
-run.bat
-```
-> `run.bat` auto-recreates the venv if Python was moved/updated.  
-> Opens `http://localhost:8000` in the browser automatically.
-
-### Manual run (from repo root)
-```bat
+:: Manual (from repo root)
 venv\Scripts\activate
 cd backend
 python -m uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
----
+```bash
+# Docker (from repo root)
+docker compose -f docker/docker-compose.yml up -d --build
+docker compose -f docker/docker-compose.yml --profile ngrok up -d   # + HTTPS tunnel for Spotify OAuth
+docker logs utube-mp3 -f
+```
 
-## Running in Docker
+## Testing
 
 ```bash
-# First time: copy env template and fill in values
-cp docker/.env.example docker/.env
-
-# Build and start
-docker compose -f docker/docker-compose.yml up -d --build
-
-# Logs
-docker logs utube-mp3 -f
-
-# Stop
-docker compose -f docker/docker-compose.yml down
-```
-
-Data (MP3s + DB) are stored in the `utube_data` Docker volume.
-
----
-
-## Dependencies
-
-```
-fastapi
-uvicorn[standard]
-ytmusicapi       # YouTube Music API wrapper (no auth needed for search)
-yt-dlp           # YouTube downloader
-sqlalchemy       # ORM for SQLite
-aiofiles         # Async file I/O (used by FastAPI static files)
+python smoke_test.py                         # against http://127.0.0.1:8000
+python smoke_test.py http://host:8000 --download   # also downloads/deletes one track
 ```
 
 ---
 
 ## Key Patterns & Gotchas
 
-- **CORS** is fully open (`allow_origins=["*"]`). Fine for local/self-hosted use.
-- **Progress tracking** is in-memory (`download_progress` dict). It resets on server restart and is not thread-safe for multi-worker deployments — use single worker.
-- **Duplicate check:** before downloading, backend queries DB by `video_id`. If already exists, returns early without re-downloading.
-- **Filename sanitization:** strips `<>:"/\|?*` from title/artist before writing to disk.
-- **Frontend is served as static files** via FastAPI's `StaticFiles` mount at `/`.
-- **SQLAlchemy `check_same_thread=False`** is required for SQLite with FastAPI's background tasks.
-- The `ytmusicapi` `YTMusic()` instance is created once at module import (no authentication required for public search).
-
----
-
-## Testing
-
-```bash
-# Quick API smoke test
-python test_api.py
-
-# yt-dlp connectivity test
-python test_yt.py
-```
+- **YouTube needs a JS runtime.** Without Deno/Node.js, yt-dlp falls back to clients YouTube answers with **HTTP 403**. `requirements.txt` uses `yt-dlp[default]` (pulls `yt-dlp-ejs`). Keep yt-dlp current: `run.bat` upgrades it on each start; Docker gets it on rebuild.
+- **"Sign in to confirm you're not a bot" / HTTP 429** = YouTube rate-limited the IP (also happens after many test downloads). Not a code bug; wait or use cookies.
+- **Single worker only**: `download_progress` is in memory. It resets on restart (frontend gives up after 5 `unknown` polls).
+- **Spotify OAuth**: Spotify accepts `http://` only for `127.0.0.1` (not `localhost`); remote access needs HTTPS (ngrok profile). The callback redirects to `APP_BASE_URL/#spotify`, which the frontend handles on load. Spotipy uses `MemoryCacheHandler`, so no `.cache` token files.
+- **Frontend**: always pass YouTube/Spotify strings through `escapeHtml()` before `innerHTML`; attach handlers with `addEventListener`, not inline `onclick` with string interpolation.
+- **Docker image** runs as uid 1000; a bind-mounted `DATA_PATH` must be writable by that uid.
+- **Frontend is served as static files** via FastAPI's `StaticFiles` mount at `/` (mounted last, after API routes). Bump `?v=` in `index.html` when changing js/css.

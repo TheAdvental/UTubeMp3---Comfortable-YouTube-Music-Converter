@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="title">UTubeMp3 - Music Downloader</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260805b">
+    <link rel="stylesheet" href="style.css?v=20261014">
 </head>
 <body>
     <div class="blob blob-1"></div>
@@ -131,13 +131,13 @@
         </section>
 
         <!-- Spotify Main Section -->
-        <section id="section-spotify" class="section active" style="display: none;">
+        <section id="section-spotify" class="section" style="display: none;">
             <!-- Spotify credentials warning banner -->
             <div id="spotify-creds-warning" class="spotify-creds-banner" style="display:none;">
                 <div class="spotify-creds-icon">⚠️</div>
                 <div>
                     <strong data-i18n="spotifyCredsTitle">Spotify API not configured</strong><br>
-                    <span data-i18n="spotifyCredsDesc">Add your Client ID and Secret in <code>backend/config.py</code> to enable Spotify features.</span>
+                    <span data-i18n="spotifyCredsDesc">Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to .env (local) or docker/.env (Docker) and restart.</span>
                     <br><a href="https://developer.spotify.com/dashboard" target="_blank" style="color:#1DB954;">developer.spotify.com/dashboard →</a>
                 </div>
             </div>
@@ -155,7 +155,7 @@
                         <span id="spotify-setup-steps">
                             Спочатку: <a href="https://developer.spotify.com/dashboard" target="_blank" style="color:#1DB954;">developer.spotify.com/dashboard</a>
                             → Ваш додаток → <em>Edit Settings</em> → <em>Redirect URIs</em> → додайте
-                            <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:3px;">http://localhost:8000/api/spotify/callback</code>
+                            <code id="spotify-redirect-uri" style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:3px;">http://127.0.0.1:8000/api/spotify/callback</code>
                             → Save. Потім натисніть "Підключити".
                         </span>
                     </span>
@@ -258,8 +258,6 @@
         </div>
     </div>
 
-    </div>
-
-    <script src="app.js?v=20260805b"></script>
+    <script src="app.js?v=20261014"></script>
 </body>
 </html>

@@ -1,4 +1,19 @@
 const API_URL = window.location.origin + '/api';
+const PLACEHOLDER_IMG = '/placeholder.svg';
+
+// Server-side profile settings (local vs docker), loaded on startup
+let appConfig = { app_env: 'local', auto_browser_download: false, show_file_paths: true };
+fetch(`${API_URL}/config`).then(r => r.json()).then(cfg => { appConfig = { ...appConfig, ...cfg }; }).catch(() => {});
+
+// Escape text before putting it into innerHTML (titles from YouTube can contain <, ", ' etc.)
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 const TRANSLATIONS = {
     en: {
@@ -69,6 +84,9 @@ const TRANSLATIONS = {
         deleteFailed: "Failed to delete.",
         multiSelectMode: "Select Multiple",
         saveToDevice: "💾 Save to device",
+        fileMissing: "File missing",
+        redownload: "⬇ Download again",
+        singleSuffix: "Single",
         // Spotify
         spotifyTab: "Spotify",
         spotifyUrlTitle: "Open Spotify Playlist / Album",
@@ -82,15 +100,13 @@ const TRANSLATIONS = {
         backToSpotify: "← Back to Spotify",
         downloadEntirePlaylist: "⬇ Download all tracks",
         playlistTracks: "Playlist tracks",
-        albumTracks: "Album tracks",
         spotifyCredsTitle: "Spotify API not configured",
-        spotifyCredsDesc: "Add your Client ID and Secret in backend/config.py to enable Spotify features.",
+        spotifyCredsDesc: "Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to .env (local) or docker/.env (Docker) and restart.",
         resolving: "Finding...",
         spotifySearchFailed: "Failed to search Spotify",
         spotifyLoadFailed: "Failed to load from Spotify",
         spotifyResolveFailed: "Could not find this track on YouTube",
         playlistPrivateError: "This playlist is private. Please right-click it in Spotify → Make public, then try again.",
-        noAlbums: "No albums found.",
     },
     uk: {
         title: "UTubeMp3 - Завантажувач Музики",
@@ -160,6 +176,9 @@ const TRANSLATIONS = {
         deleteFailed: "Не вдалося видалити.",
         multiSelectMode: "Вибрати декілька",
         saveToDevice: "💾 Зберегти на пристрій",
+        fileMissing: "Файл відсутній",
+        redownload: "⬇ Завантажити знову",
+        singleSuffix: "Сингл",
         // Spotify
         spotifyTab: "Spotify",
         spotifyUrlTitle: "Відкрити плейлист / альбом Spotify",
@@ -173,15 +192,13 @@ const TRANSLATIONS = {
         backToSpotify: "← Назад до Spotify",
         downloadEntirePlaylist: "⬇ Завантажити всі треки",
         playlistTracks: "Треки плейлиста",
-        albumTracks: "Треки альбому",
         spotifyCredsTitle: "Spotify API не налаштовано",
-        spotifyCredsDesc: "Додайте Client ID та Secret у backend/config.py щоб увімкнути Spotify.",
+        spotifyCredsDesc: "Додайте SPOTIFY_CLIENT_ID та SPOTIFY_CLIENT_SECRET у .env (локально) або docker/.env (Docker) і перезапустіть.",
         resolving: "Пошук...",
         spotifySearchFailed: "Не вдалося виконати пошук у Spotify",
         spotifyLoadFailed: "Не вдалося завантажити дані зі Spotify",
         spotifyResolveFailed: "Не вдалося знайти трек на YouTube",
         playlistPrivateError: "Плейліст приватний. Натисніть ПКМ на нього в Spotify → 'Зробити публічним', і спробуйте знову.",
-        noAlbums: "Альбоми не знайдені.",
     }
 };
 
@@ -238,7 +255,16 @@ document.addEventListener('DOMContentLoaded', () => {
             setLanguage(e.target.getAttribute('data-lang'));
         });
     });
-    history.replaceState({ section: 'search' }, '', '#search');
+    // Spotify OAuth callback redirects back to /#spotify (optionally with ?error=...)
+    if (location.hash.startsWith('#spotify')) {
+        const oauthError = new URLSearchParams(location.hash.split('?')[1] || '').get('error');
+        switchSection('spotify', false);
+        history.replaceState({ section: 'spotify' }, '', '#spotify');
+        checkSpotifyCredentials();
+        if (oauthError) showToast(t('error'), `Spotify: ${escapeHtml(oauthError)}`, 'error');
+    } else {
+        history.replaceState({ section: 'search' }, '', '#search');
+    }
     renderRecentSearches();
 
     const queueHeader = document.getElementById('queue-header');
@@ -436,8 +462,8 @@ function renderRecentSearches() {
         const card = document.createElement('div');
         card.className = 'artist-card';
         card.innerHTML = `
-            <img style="width: 80px; height: 80px;" src="${artist.thumb}" alt="${artist.name}">
-            <h3 style="font-size: 1rem;">${artist.name}</h3>
+            <img style="width: 80px; height: 80px;" src="${escapeHtml(artist.thumb)}" alt="${escapeHtml(artist.name)}">
+            <h3 style="font-size: 1rem;">${escapeHtml(artist.name)}</h3>
         `;
         card.addEventListener('click', () => loadArtist(artist.browseId, true));
         list.appendChild(card);
@@ -507,13 +533,13 @@ async function executeSearch(source) {
         if (renderType === 'artists') {
             searchResults.className = 'grid-results';
             data.forEach(artist => {
-                const thumb = artist.thumbnails && artist.thumbnails.length > 0 ? artist.thumbnails[artist.thumbnails.length-1].url : 'https://via.placeholder.com/120?text=No+Image';
+                const thumb = artist.thumbnails && artist.thumbnails.length > 0 ? artist.thumbnails[artist.thumbnails.length-1].url : PLACEHOLDER_IMG;
                 
                 const card = document.createElement('div');
                 card.className = 'artist-card';
                 card.innerHTML = `
-                    <img src="${thumb}" alt="${artist.artist}">
-                    <h3>${artist.artist}</h3>
+                    <img src="${escapeHtml(thumb)}" alt="${escapeHtml(artist.artist)}">
+                    <h3>${escapeHtml(artist.artist)}</h3>
                 `;
                 card.style.cursor = 'pointer';
                 card.addEventListener('click', () => {
@@ -526,7 +552,7 @@ async function executeSearch(source) {
             searchResults.className = 'list-container';
             data.forEach(song => {
                 if (!song.videoId) return;
-                const thumb = song.thumbnails && song.thumbnails.length ? song.thumbnails[0].url : 'https://via.placeholder.com/50';
+                const thumb = song.thumbnails && song.thumbnails.length ? song.thumbnails[0].url : PLACEHOLDER_IMG;
                 const artistName = song.artists ? song.artists.map(a => a.name).join(', ') : t('unknownArtist');
                 const albumName = song.album ? song.album.name : '';
                 searchResults.appendChild(createSongItem(song.videoId, song.title, artistName, thumb, albumName));
@@ -535,15 +561,15 @@ async function executeSearch(source) {
             searchResults.className = 'grid-albums';
             data.forEach(album => {
                 if (!album.browseId) return;
-                const thumb = album.thumbnails && album.thumbnails.length ? album.thumbnails[0].url : 'https://via.placeholder.com/150';
+                const thumb = album.thumbnails && album.thumbnails.length ? album.thumbnails[0].url : PLACEHOLDER_IMG;
                 const artistName = album.artists ? album.artists.map(a => a.name).join(', ') : t('unknownArtist');
                 
                 const card = document.createElement('div');
                 card.className = 'album-card';
                 card.innerHTML = `
-                    <img src="${thumb}" alt="${album.title}">
-                    <h4 style="margin-top:0.5rem">${album.title}</h4>
-                    <p style="font-size:0.8rem; color:#94a3b8;">${artistName} • ${album.year || ''}</p>
+                    <img src="${escapeHtml(thumb)}" alt="${escapeHtml(album.title)}">
+                    <h4 style="margin-top:0.5rem">${escapeHtml(album.title)}</h4>
+                    <p style="font-size:0.8rem; color:#94a3b8;">${escapeHtml(artistName)} • ${escapeHtml(album.year || '')}</p>
                 `;
                 card.style.cursor = 'pointer';
                 card.addEventListener('click', () => {
@@ -578,7 +604,7 @@ async function loadArtist(browseId, pushState = true) {
         document.getElementById('artist-name').innerText = data.name;
         document.getElementById('artist-desc').innerText = data.description || t('artistDescDefault');
         
-        const thumbUrl = data.thumbnails && data.thumbnails.length > 0 ? data.thumbnails[0].url : 'https://via.placeholder.com/200?text=No+Image';
+        const thumbUrl = data.thumbnails && data.thumbnails.length > 0 ? data.thumbnails[0].url : PLACEHOLDER_IMG;
         document.getElementById('artist-img').src = thumbUrl;
         
         // Set initial capacities
@@ -587,13 +613,15 @@ async function loadArtist(browseId, pushState = true) {
         
         // Cache data for local search
         currentArtistSongsData = data.songs || [];
-        currentArtistAlbumsData = data.albums || [];
+        // Singles/EPs go after full albums
+        const singles = (data.singles || []).map(s => ({ ...s, isSingle: true }));
+        currentArtistAlbumsData = [...(data.albums || []), ...singles];
         
         renderArtistContent(currentArtistSongsData.slice(0, displayedSongsCount), currentArtistAlbumsData.slice(0, displayedAlbumsCount), data.name);
         
         // Background fetch the rest
         if (data.songsBrowseId && currentArtistSongsData.length <= 10) {
-            fetch(`${API_URL}/youtube/playlist/${data.songsBrowseId}`).then(r=>r.json()).then(moreSongs => {
+            fetch(`${API_URL}/youtube/playlist/${encodeURIComponent(data.songsBrowseId)}`).then(r=>r.json()).then(moreSongs => {
                 if (Array.isArray(moreSongs)) {
                     const existingIds = new Set(currentArtistSongsData.map(s => s.videoId));
                     const newSongs = moreSongs.filter(s => s.videoId && !existingIds.has(s.videoId));
@@ -602,15 +630,28 @@ async function loadArtist(browseId, pushState = true) {
             });
         }
         
-        if (data.albumsBrowseId && data.albumsParams) {
-             fetch(`${API_URL}/youtube/artist/${data.albumsBrowseId}/albums?params=${data.albumsParams}`).then(r=>r.json()).then(moreAlbums => {
-                 if (Array.isArray(moreAlbums)) {
-                     const existingIds = new Set(currentArtistAlbumsData.map(a => a.browseId));
-                     const newAlbums = moreAlbums.filter(a => a.browseId && !existingIds.has(a.browseId));
-                     currentArtistAlbumsData = [...currentArtistAlbumsData, ...newAlbums];
-                 }
-             });
-        }
+        // Full album / singles lists (the artist page only contains the first ~10 of each)
+        const loadMoreReleases = (browseId, params, isSingle) => {
+            if (!browseId || !params) return;
+            fetch(`${API_URL}/youtube/artist/${encodeURIComponent(browseId)}/albums?params=${encodeURIComponent(params)}`)
+                .then(r => r.json())
+                .then(more => {
+                    if (!Array.isArray(more)) return;
+                    const existingIds = new Set(currentArtistAlbumsData.map(a => a.browseId));
+                    const extra = more.filter(a => a.browseId && !existingIds.has(a.browseId)).map(a => ({ ...a, isSingle }));
+                    if (isSingle) {
+                        currentArtistAlbumsData = [...currentArtistAlbumsData, ...extra];
+                    } else {
+                        // Keep full albums before singles
+                        const albumsOnly = currentArtistAlbumsData.filter(a => !a.isSingle);
+                        const singlesOnly = currentArtistAlbumsData.filter(a => a.isSingle);
+                        currentArtistAlbumsData = [...albumsOnly, ...extra, ...singlesOnly];
+                    }
+                })
+                .catch(() => {});
+        };
+        loadMoreReleases(data.albumsBrowseId, data.albumsParams, false);
+        loadMoreReleases(data.singlesBrowseId, data.singlesParams, true);
 
     } catch (err) {
         showToast(t('error'), t('profileFailed'), 'error');
@@ -631,21 +672,27 @@ function renderArtistContent(songs, albums, artistName) {
     artistAlbums.innerHTML = '';
     if (albums && albums.length) {
         albums.forEach(album => {
-            const aThumb = album.thumbnails && album.thumbnails.length ? album.thumbnails[0].url : '';
-            const card = document.createElement('div');
-            card.className = 'album-card';
-            card.innerHTML = `
-                <img src="${aThumb}" alt="${album.title}">
-                <h4>${album.title}</h4>
-                <p>${album.year || ''}</p>
-            `;
-            card.style.cursor = 'pointer';
-            card.addEventListener('click', () => loadAlbum(album.browseId, true));
-            artistAlbums.appendChild(card);
+            artistAlbums.appendChild(createArtistAlbumCard(album));
         });
     } else {
         artistAlbums.innerHTML = `<p>${t('noAlbums')}</p>`;
     }
+}
+
+function createArtistAlbumCard(album) {
+    const aThumb = album.thumbnails && album.thumbnails.length ? album.thumbnails[0].url : PLACEHOLDER_IMG;
+    const isSingle = album.isSingle || album.type === 'Single' || album.type === 'EP';
+    const meta = [isSingle ? (album.type === 'EP' ? 'EP' : t('singleSuffix')) : '', album.year || ''].filter(Boolean).join(' • ');
+    const card = document.createElement('div');
+    card.className = 'album-card';
+    card.innerHTML = `
+        <img src="${escapeHtml(aThumb)}" alt="${escapeHtml(album.title)}">
+        <h4>${escapeHtml(album.title)}</h4>
+        <p>${escapeHtml(meta)}</p>
+    `;
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', () => loadAlbum(album.browseId, true));
+    return card;
 }
 
 function appendMoreArtistContent() {
@@ -666,17 +713,7 @@ function appendMoreArtistContent() {
     
     if (nextAlbums.length > 0) {
         nextAlbums.forEach(album => {
-            const aThumb = album.thumbnails && album.thumbnails.length ? album.thumbnails[0].url : '';
-            const card = document.createElement('div');
-            card.className = 'album-card';
-            card.innerHTML = `
-                <img src="${aThumb}" alt="${album.title}">
-                <h4>${album.title}</h4>
-                <p>${album.year || ''}</p>
-            `;
-            card.style.cursor = 'pointer';
-            card.addEventListener('click', () => loadAlbum(album.browseId, true));
-            artistAlbums.appendChild(card);
+            artistAlbums.appendChild(createArtistAlbumCard(album));
         });
         displayedAlbumsCount += nextAlbums.length;
     }
@@ -711,25 +748,25 @@ window.addEventListener('scroll', () => {
 function createSongItem(videoId, title, artist, thumbnail, albumName) {
     const div = document.createElement('div');
     div.className = 'song-item';
-    
-    // Prepare data strings safely for HTML attributes
-    const safeTitle = (title || "").replace(/"/g, '&quot;');
-    const safeArtist = (artist || "").replace(/"/g, '&quot;');
-    const safeThumb = (thumbnail || "").replace(/"/g, '&quot;');
-    
+    title = title || '';
+    artist = artist || '';
+    thumbnail = thumbnail || '';
+
+    // setAttribute escapes values itself
     div.setAttribute('data-video-id', videoId);
-    div.setAttribute('data-title', safeTitle);
-    div.setAttribute('data-artist', safeArtist);
-    div.setAttribute('data-thumbnail', safeThumb);
+    div.setAttribute('data-title', title);
+    div.setAttribute('data-artist', artist);
+    div.setAttribute('data-thumbnail', thumbnail);
 
     div.innerHTML = `
-        <img src="${thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
+        <img src="${escapeHtml(thumbnail || PLACEHOLDER_IMG)}" alt="cover">
         <div class="song-info">
-            <h4>${title}</h4>
-            <p>${albumName || artist}</p>
+            <h4>${escapeHtml(title)}</h4>
+            <p>${escapeHtml(albumName || artist)}</p>
         </div>
-        <button class="download-btn" onclick="startDownload('${videoId}', '${title.replace(/'/g, "\\'")}', '${artist.replace(/'/g, "\\'")}', '${thumbnail}')">${t('downloadToMp3')}</button>
+        <button class="download-btn">${t('downloadToMp3')}</button>
     `;
+    div.querySelector('.download-btn').addEventListener('click', () => startDownload(videoId, title, artist, thumbnail));
     return div;
 }
 
@@ -751,7 +788,7 @@ async function loadAlbum(browseId, pushState = true) {
         const artistName = (data.artists && data.artists.length) ? data.artists.map(a => a.name).join(', ') : t('unknownArtist');
         document.getElementById('album-desc').innerText = `${artistName} • ${data.year || ''} • ${data.trackCount || 0} ${t('songs').toLowerCase()}`;
         
-        const thumbUrl = data.thumbnails && data.thumbnails.length ? data.thumbnails[0].url : 'https://via.placeholder.com/200';
+        const thumbUrl = data.thumbnails && data.thumbnails.length ? data.thumbnails[0].url : PLACEHOLDER_IMG;
         document.getElementById('album-img').src = thumbUrl;
         
         currentAlbumTracks = [];
@@ -821,7 +858,7 @@ function updateQueueUI() {
         qItem.className = 'queue-item';
         qItem.innerHTML = `
             <div class="queue-item-header">
-                <span class="queue-item-title" title="${item.title}">${item.title}</span>
+                <span class="queue-item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
                 <span class="queue-item-status">${item.status === 'completed' ? t('success') : item.status === 'error' ? t('error') : item.progress}</span>
             </div>
             <div class="queue-item-progress-bar">
@@ -856,17 +893,33 @@ async function startDownload(videoId, title, artist, thumbnail) {
     }
     
     try {
-        const res = await fetch(`${API_URL}/downloader/download?video_id=${videoId}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&thumbnail=${encodeURIComponent(thumbnail)}`, {
-            method: 'POST'
+        const params = new URLSearchParams({
+            video_id: videoId,
+            title: title || '',
+            artist: artist || '',
+            thumbnail: thumbnail || ''
         });
+        const res = await fetch(`${API_URL}/downloader/download?${params}`, { method: 'POST' });
         const data = await res.json();
-        
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
         if (data.message === 'Already downloaded') {
             showToast(t('success'), t('alreadyInLibrary'), 'success');
             return;
         }
+        if (data.message === 'Already downloading') {
+            showToast(t('warning'), t('downloadAlreadyStarted'), 'info');
+            if (!activeDownloads.has(videoId)) {
+                // e.g. page was reloaded while the server is still working: resume tracking
+                activeDownloads.add(videoId);
+                downloadQueue.set(videoId, { title: title, progress: '0%', status: 'downloading' });
+                updateQueueUI();
+                pollProgress(videoId, title);
+            }
+            return;
+        }
 
-        showToast(t('info'), `${t('downloadStarted')} ${title}`);
+        showToast(t('info'), `${t('downloadStarted')} ${escapeHtml(title)}`);
         activeDownloads.add(videoId);
         downloadQueue.set(videoId, { title: title, progress: '0%', status: 'downloading' });
         updateQueueUI();
@@ -878,17 +931,24 @@ async function startDownload(videoId, title, artist, thumbnail) {
 }
 
 function pollProgress(videoId, title) {
+    let unknownCount = 0;
     const interval = setInterval(async () => {
         try {
             const res = await fetch(`${API_URL}/downloader/progress/${videoId}`);
             const data = await res.json();
-            
+
+            // Server restarted / lost the job: give up after a few polls instead of spinning forever
+            if (data.status === 'unknown' && ++unknownCount >= 5) {
+                data.status = 'error';
+                data.error = 'Download was lost (server restarted?)';
+            }
+
             const qItem = downloadQueue.get(videoId);
             if(qItem) {
-                qItem.progress = data.progress;
+                qItem.progress = data.progress || '0%';
                 updateQueueUI();
             }
-            
+
             if (data.status === 'completed' || data.status === 'error') {
                 clearInterval(interval);
                 activeDownloads.delete(videoId);
@@ -899,20 +959,25 @@ function pollProgress(videoId, title) {
                 }
                 
                 if (data.status === 'completed') {
-                    showToast(t('success'), `${title} ${t('downloadSuccessMsg')}`, 'success');
-                    // Auto-trigger browser download so the file is also saved to the user's device.
-                    // Small delay ensures the server has fully flushed the file before streaming it.
-                    setTimeout(() => {
-                        const a = document.createElement('a');
-                        a.href = `${API_URL}/downloader/file/${videoId}`;
-                        // Set explicit .mp3 extension so Chrome never saves it as .txt
-                        a.download = `${title}.mp3`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                    }, 300);
+                    showToast(t('success'), `${escapeHtml(title)} ${t('downloadSuccessMsg')}`, 'success');
+                    if (secHistory.style.display === 'block') loadHistory();
+                    // On a server (Docker) the MP3 lives on another machine, so also push it to the browser.
+                    // Locally the file is already in the downloads folder — no need to duplicate it.
+                    if (appConfig.auto_browser_download) {
+                        setTimeout(() => {
+                            const a = document.createElement('a');
+                            a.href = `${API_URL}/downloader/file/${videoId}`;
+                            // Set explicit .mp3 extension so Chrome never saves it as .txt
+                            a.download = `${title}.mp3`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }, 300);
+                    }
                 } else {
-                    showToast(t('error'), `${t('downloadErrorMsg')} ${title}`, 'error');
+                    const reason = data.error ? `<br><small>${escapeHtml(data.error)}</small>` : '';
+                    showToast(t('error'), `${t('downloadErrorMsg')} ${escapeHtml(title)}${reason}`, 'error');
+                    console.error('Download failed', videoId, data.error);
                 }
             }
         } catch (e) {
@@ -946,20 +1011,30 @@ async function loadHistory() {
             
             const dateStr = new Date(song.downloaded_at).toLocaleString((currentLang === 'uk') ? 'uk-UA' : 'en-US');
             
+            const title = (song.title || '').replace(/\.(mp3|m4a|webm|ogg|flac|wav|opus)$/i, '');
+            const badge = song.file_exists
+                ? `<span style="font-size: 0.7rem; background: var(--success); padding: 2px 6px; border-radius: 4px; margin-left:10px;">${t('mp3Saved')}</span>`
+                : `<span style="font-size: 0.7rem; background: #ef4444; padding: 2px 6px; border-radius: 4px; margin-left:10px;">${t('fileMissing')}</span>`;
+            const fileLine = appConfig.show_file_paths ? song.file_path : song.file_name;
+            const mainAction = song.file_exists
+                ? `<a href="${API_URL}/downloader/file/${encodeURIComponent(song.video_id)}" download style="margin-left: 0.5rem; text-decoration: none;">
+                       <button class="action-btn" style="background: var(--primary); color: white;">${t('saveToDevice')}</button>
+                   </a>`
+                : `<button class="action-btn redownload-btn" style="margin-left: 0.5rem; background: var(--primary); color: white;">${t('redownload')}</button>`;
+
             div.setAttribute('data-video-id', song.video_id);
             div.innerHTML = `
-                <img src="${song.thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
+                <img src="${escapeHtml(song.thumbnail || PLACEHOLDER_IMG)}" alt="cover">
                 <div class="song-info">
-                    <h4>${song.title.replace(/\.(mp3|m4a|webm|ogg|flac|wav|opus)$/i, '')} <span style="font-size: 0.7rem; background: var(--success); padding: 2px 6px; border-radius: 4px; margin-left:10px;">${t('mp3Saved')}</span></h4>
-                    <p>${song.artist} • ${t('downloadedAtStr')} ${dateStr}</p>
-                    <p style="font-size:0.75rem; color:#64748b; margin-top: 4px;">${t('fileStr')} ${song.file_path}</p>
+                    <h4>${escapeHtml(title)} ${badge}</h4>
+                    <p>${escapeHtml(song.artist)} • ${t('downloadedAtStr')} ${dateStr}</p>
+                    <p style="font-size:0.75rem; color:#64748b; margin-top: 4px;">${t('fileStr')} ${escapeHtml(fileLine)}</p>
                 </div>
-                <a href="${API_URL}/downloader/file/${song.video_id}" download
-                   style="margin-left: 0.5rem; text-decoration: none;">
-                    <button class="action-btn" style="background: var(--primary); color: white;">${t('saveToDevice')}</button>
-                </a>
-                <button class="action-btn delete-btn" style="margin-left: 0.5rem;" onclick="deleteSongs(['${song.video_id}'])">🗑</button>
+                ${mainAction}
+                <button class="action-btn delete-btn" style="margin-left: 0.5rem;">🗑</button>
             `;
+            div.querySelector('.delete-btn').addEventListener('click', () => deleteSongs([song.video_id]));
+            div.querySelector('.redownload-btn')?.addEventListener('click', () => startDownload(song.video_id, title, song.artist, song.thumbnail));
             historyResults.appendChild(div);
         });
     } catch (err) {
@@ -978,8 +1053,13 @@ async function deleteSongs(videoIds) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ video_ids: videoIds })
         });
-        
-        showToast(t('success'), t('deleteSuccess'), 'success');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+        if (data.errors && data.errors.length) {
+            showToast(t('warning'), data.errors.map(escapeHtml).join('<br>'), 'error');
+        } else {
+            showToast(t('success'), t('deleteSuccess'), 'success');
+        }
         uncheckAll();
         document.getElementById('history-results')?.classList.remove('selection-mode');
         removeCheckboxes('history-results');
@@ -1011,6 +1091,7 @@ function updateSelectionState() {
         if (cb.getAttribute('data-type') === 'download') {
             selectedForDownload.push({
                 videoId: cb.getAttribute('data-video-id'),
+                spotifyId: cb.getAttribute('data-spotify-id'),
                 title: cb.getAttribute('data-title'),
                 artist: cb.getAttribute('data-artist'),
                 thumbnail: cb.getAttribute('data-thumbnail')
@@ -1032,13 +1113,23 @@ function updateSelectionState() {
             if (selectedForDownload.length > 0) {
                 let delay = 0;
                 selectedForDownload.forEach(track => {
-                    setTimeout(() => startDownload(track.videoId, track.title, track.artist, track.thumbnail), delay);
+                    setTimeout(async () => {
+                        let { videoId, title, artist, thumbnail } = track;
+                        if (!videoId && track.spotifyId) {
+                            videoId = await resolveSpotifyToVideoId(track.spotifyId, title, artist, thumbnail);
+                        }
+                        if (videoId) startDownload(videoId, title, artist, thumbnail);
+                        else showToast(t('error'), `${t('spotifyResolveFailed')}: ${escapeHtml(title)}`, 'error');
+                    }, delay);
                     delay += 1000;
                 });
                 uncheckAll();
-                document.getElementById('album-tracks')?.classList.remove('selection-mode');
-                removeCheckboxes('album-tracks');
+                ['album-tracks', 'spotify-pl-tracks'].forEach(id => {
+                    document.getElementById(id)?.classList.remove('selection-mode');
+                    removeCheckboxes(id);
+                });
                 document.getElementById('multi-select-album-btn')?.classList.remove('active');
+                document.getElementById('multi-select-spotify-btn')?.classList.remove('active');
             } else if (selectedForDelete.length > 0) {
                 deleteSongs(selectedForDelete);
             }
@@ -1085,7 +1176,7 @@ function injectCheckboxes(containerId, type) {
             const artist = item.getAttribute('data-artist') || '';
             const thumb = item.getAttribute('data-thumbnail') || '';
             
-            cbContainer.innerHTML = `<input type="checkbox" class="song-checkbox" data-type="${type}" data-video-id="${vid}" data-title="${title}" data-artist="${artist}" data-thumbnail="${thumb}">`;
+            cbContainer.innerHTML = `<input type="checkbox" class="song-checkbox" data-type="${type}" data-video-id="${escapeHtml(vid)}" data-title="${escapeHtml(title)}" data-artist="${escapeHtml(artist)}" data-thumbnail="${escapeHtml(thumb)}">`;
             
             item.prepend(cbContainer);
         }
@@ -1205,9 +1296,10 @@ function formatDuration(ms) {
 // ── Spotify credentials + OAuth status ──────────────────────────────────────
 async function checkSpotifyCredentials() {
     try {
-        const res = await fetch(`${API_URL}/spotify/search?q=test&type=track`);
+        const res = await fetch(`${API_URL}/spotify/auth-status`);
+        const status = await res.json();
         const credsBanner = document.getElementById('spotify-creds-warning');
-        if (res.status === 503) {
+        if (!status.configured) {
             credsBanner.style.display = 'flex';
             document.getElementById('spotify-login-banner').style.display = 'none';
             return false;
@@ -1233,6 +1325,15 @@ async function checkSpotifyAuthStatus() {
         const setupSteps = document.getElementById('spotify-setup-steps');
 
         banner.style.display = 'flex';
+
+        const redirectEl = document.getElementById('spotify-redirect-uri');
+        if (redirectEl && data.redirect_uri) redirectEl.textContent = data.redirect_uri;
+        // OAuth comes back to APP_BASE_URL; if the page is opened on another address,
+        // send the login through that address so the session ends up in the same tab origin.
+        const loginBtn0 = document.getElementById('spotify-login-btn');
+        if (loginBtn0 && data.app_base_url) {
+            loginBtn0.onclick = () => { window.location.href = `${data.app_base_url}/api/spotify/login`; };
+        }
 
         if (data.logged_in) {
             loginBtn.style.display = 'none';
@@ -1324,9 +1425,9 @@ async function doSpotifySearch() {
                 const card = document.createElement('div');
                 card.className = 'spotify-playlist-card';
                 card.innerHTML = `
-                    <img src="${album.thumbnail}" alt="${album.title}">
-                    <h4>${album.title}</h4>
-                    <p>${album.artistStr} • ${album.year}</p>
+                    <img src="${escapeHtml(album.thumbnail)}" alt="${escapeHtml(album.title)}">
+                    <h4>${escapeHtml(album.title)}</h4>
+                    <p>${escapeHtml(album.artistStr)} • ${escapeHtml(album.year)}</p>
                 `;
                 card.addEventListener('click', () => loadSpotifyPlaylist(album.id, 'album', true));
                 results.appendChild(card);
@@ -1337,9 +1438,9 @@ async function doSpotifySearch() {
                 const card = document.createElement('div');
                 card.className = 'spotify-playlist-card';
                 card.innerHTML = `
-                    <img src="${pl.thumbnail}" alt="${pl.name}">
-                    <h4>${pl.name}</h4>
-                    <p>${pl.owner} • ${pl.total_tracks} ${t('tracks').toLowerCase()}</p>
+                    <img src="${escapeHtml(pl.thumbnail)}" alt="${escapeHtml(pl.name)}">
+                    <h4>${escapeHtml(pl.name)}</h4>
+                    <p>${escapeHtml(pl.owner)} • ${pl.total_tracks} ${t('tracks').toLowerCase()}</p>
                 `;
                 card.addEventListener('click', () => loadSpotifyPlaylist(pl.id, 'playlist', true));
                 results.appendChild(card);
@@ -1350,8 +1451,8 @@ async function doSpotifySearch() {
                 const card = document.createElement('div');
                 card.className = 'artist-card';
                 card.innerHTML = `
-                    <img style="width:80px;height:80px;border-radius:50%;object-fit:cover;" src="${artist.thumbnail}" alt="${artist.name}">
-                    <h3 style="font-size:1rem;">${artist.name}</h3>
+                    <img style="width:80px;height:80px;border-radius:50%;object-fit:cover;" src="${escapeHtml(artist.thumbnail)}" alt="${escapeHtml(artist.name)}">
+                    <h3 style="font-size:1rem;">${escapeHtml(artist.name)}</h3>
                 `;
                 card.addEventListener('click', () => loadSpotifyArtist(artist.id, true));
                 results.appendChild(card);
@@ -1380,13 +1481,13 @@ function createSpotifySongItem(track) {
     const duration = formatDuration(track.duration_ms);
 
     div.innerHTML = `
-        <img src="${track.thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
+        <img src="${escapeHtml(track.thumbnail || PLACEHOLDER_IMG)}" alt="cover">
         <div class="song-info">
-            <h4>${track.title} <span class="spotify-badge">
+            <h4>${escapeHtml(track.title)} <span class="spotify-badge">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
                 Spotify
             </span></h4>
-            <p>${track.artistStr}${track.album ? ' • ' + track.album : ''}</p>
+            <p>${escapeHtml(track.artistStr)}${track.album ? ' • ' + escapeHtml(track.album) : ''}</p>
         </div>
         ${duration ? `<span class="track-duration">${duration}</span>` : ''}
         <button class="download-btn spotify-resolve-btn">
@@ -1403,6 +1504,23 @@ function createSpotifySongItem(track) {
 // ── Resolve Spotify track → YouTube → download ────────────────────────────────
 const spotifyResolveCache = {}; // Cache resolved video IDs
 
+// Find the YouTube Music video for a Spotify track. Returns videoId or null.
+async function resolveSpotifyToVideoId(spotifyId, title, artist, thumbnail) {
+    if (spotifyResolveCache[spotifyId]) return spotifyResolveCache[spotifyId].videoId;
+    try {
+        const res = await fetch(
+            `${API_URL}/spotify/resolve?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.videoId) return null;
+        spotifyResolveCache[spotifyId] = { videoId: data.videoId, title, artist, thumbnail };
+        return data.videoId;
+    } catch (e) {
+        return null;
+    }
+}
+
 async function resolveAndDownloadSpotify(track, btn, itemDiv) {
     // If already resolved, download directly
     if (spotifyResolveCache[track.id]) {
@@ -1416,20 +1534,10 @@ async function resolveAndDownloadSpotify(track, btn, itemDiv) {
     btn.classList.add('resolving-btn');
 
     try {
-        const res = await fetch(
-            `${API_URL}/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artistStr)}`
-        );
-        if (!res.ok) throw new Error('resolve failed');
-        const data = await res.json();
-        const videoId = data.videoId;
+        const videoId = await resolveSpotifyToVideoId(track.id, track.title, track.artistStr, track.thumbnail);
+        if (!videoId) throw new Error('resolve failed');
 
-        // Cache result and set video-id on item for multi-select
-        spotifyResolveCache[track.id] = {
-            videoId,
-            title: track.title,
-            artist: track.artistStr,
-            thumbnail: track.thumbnail
-        };
+        // Set video-id on item for multi-select
         itemDiv.setAttribute('data-video-id', videoId);
 
         btn.classList.remove('resolving-btn');
@@ -1521,19 +1629,12 @@ document.getElementById('download-spotify-pl-btn').addEventListener('click', asy
     for (const track of currentSpotifyTracks) {
         setTimeout(async () => {
             try {
-                let videoId, title = track.title, artist = track.artistStr, thumbnail = track.thumbnail;
-                if (spotifyResolveCache[track.id]) {
-                    ({ videoId, title, artist, thumbnail } = spotifyResolveCache[track.id]);
-                } else {
-                    const res = await fetch(
-                        `${API_URL}/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artistStr)}`
-                    );
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    videoId = data.videoId;
-                    spotifyResolveCache[track.id] = { videoId, title, artist, thumbnail };
+                const videoId = await resolveSpotifyToVideoId(track.id, track.title, track.artistStr, track.thumbnail);
+                if (!videoId) {
+                    showToast(t('error'), `${t('spotifyResolveFailed')}: ${escapeHtml(track.title)}`, 'error');
+                    return;
                 }
-                startDownload(videoId, title, artist, thumbnail);
+                startDownload(videoId, track.title, track.artistStr, track.thumbnail);
             } catch (e) {
                 console.error('Resolve failed for', track.title, e);
             }
@@ -1556,7 +1657,8 @@ document.getElementById('multi-select-spotify-btn')?.addEventListener('click', (
                 const vid = item.getAttribute('data-video-id') || '';
                 const cbContainer = document.createElement('div');
                 cbContainer.className = 'song-checkbox-container';
-                cbContainer.innerHTML = `<input type="checkbox" class="song-checkbox" data-type="download" data-video-id="${vid}" data-title="${item.getAttribute('data-title') || ''}" data-artist="${item.getAttribute('data-artist') || ''}" data-thumbnail="${item.getAttribute('data-thumbnail') || ''}">`;
+                // Unresolved Spotify tracks have no video-id yet: keep the Spotify id so the bulk action can resolve them
+                cbContainer.innerHTML = `<input type="checkbox" class="song-checkbox" data-type="download" data-video-id="${escapeHtml(vid)}" data-spotify-id="${escapeHtml(item.getAttribute('data-spotify-id') || '')}" data-title="${escapeHtml(item.getAttribute('data-title') || '')}" data-artist="${escapeHtml(item.getAttribute('data-artist') || '')}" data-thumbnail="${escapeHtml(item.getAttribute('data-thumbnail') || '')}">`;
                 item.prepend(cbContainer);
             }
         });
@@ -1596,9 +1698,9 @@ async function loadSpotifyArtist(id, pushState = true) {
                 const card = document.createElement('div');
                 card.className = 'spotify-playlist-card';
                 card.innerHTML = `
-                    <img src="${album.thumbnail}" alt="${album.title}">
-                    <h4>${album.title}</h4>
-                    <p>${album.type === 'single' ? 'Single' : 'Album'} • ${album.year}</p>
+                    <img src="${escapeHtml(album.thumbnail)}" alt="${escapeHtml(album.title)}">
+                    <h4>${escapeHtml(album.title)}</h4>
+                    <p>${album.type === 'single' ? 'Single' : 'Album'} • ${escapeHtml(album.year)}</p>
                 `;
                 card.addEventListener('click', () => loadSpotifyPlaylist(album.id, 'album', true));
                 albumsContainer.appendChild(card);

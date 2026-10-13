@@ -1,32 +1,21 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
+import urllib.parse
 import spotipy
+from spotipy.cache_handler import MemoryCacheHandler
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 from spotipy.exceptions import SpotifyException
 from ytmusicapi import YTMusic
-import os
 
-try:
-    from config import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
-except ImportError:
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-    from config import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+from config import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, APP_BASE_URL, SPOTIFY_REDIRECT_URI
 
 router = APIRouter()
 
-# Base URL of the app — used for post-OAuth redirect back to the UI.
-# In Docker set APP_BASE_URL=http://your-server-ip:8000 in .env
-APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/")
-
-SPOTIFY_REDIRECT_URI = os.getenv(
-    "SPOTIFY_REDIRECT_URI",
-    f"{APP_BASE_URL}/api/spotify/callback"  # falls back to APP_BASE_URL
-)
 SPOTIFY_SCOPE = "playlist-read-private playlist-read-collaborative"
 
 # In-memory token store (persists while server is running)
 _user_token: dict = {}
+_cc_client = None
 
 
 # ── YouTube Music client ────────────────────────────────────────────────────────
@@ -39,16 +28,21 @@ def _check_creds():
         raise HTTPException(
             status_code=503,
             detail="Spotify credentials are not configured. "
-                   "Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in backend/config.py"
+                   "Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env (local) or docker/.env (Docker)"
         )
 
 def get_cc_spotify() -> spotipy.Spotify:
     """Client Credentials — for search, albums, artists (no playlist tracks)."""
+    global _cc_client
     _check_creds()
-    return spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-        client_id=SPOTIFY_CLIENT_ID,
-        client_secret=SPOTIFY_CLIENT_SECRET
-    ))
+    if _cc_client is None:
+        # Memory cache: don't leave a token file (.cache) lying around in the working dir
+        _cc_client = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+            client_id=SPOTIFY_CLIENT_ID,
+            client_secret=SPOTIFY_CLIENT_SECRET,
+            cache_handler=MemoryCacheHandler(),
+        ))
+    return _cc_client
 
 def _make_oauth() -> SpotifyOAuth:
     _check_creds()
@@ -57,7 +51,7 @@ def _make_oauth() -> SpotifyOAuth:
         client_secret=SPOTIFY_CLIENT_SECRET,
         redirect_uri=SPOTIFY_REDIRECT_URI,
         scope=SPOTIFY_SCOPE,
-        cache_path=None,
+        cache_handler=MemoryCacheHandler(),
         open_browser=False,
     )
 
@@ -83,7 +77,7 @@ def is_logged_in() -> bool:
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def _best_image(images: list) -> str:
     if not images:
-        return "https://via.placeholder.com/300?text=No+Image"
+        return "/placeholder.svg"
     return images[0]["url"]
 
 
@@ -136,12 +130,17 @@ def spotify_callback(code: str = None, error: str = None):
         _user_token["info"] = token_info
         return RedirectResponse(f"{APP_BASE_URL}/#spotify")
     except Exception as e:
-        return RedirectResponse(f"{APP_BASE_URL}/#spotify?error={str(e)[:100]}")
+        return RedirectResponse(f"{APP_BASE_URL}/#spotify?error={urllib.parse.quote(str(e)[:100])}")
 
 @router.get("/auth-status")
 def auth_status():
     """Check if user is logged in with Spotify."""
-    return {"logged_in": is_logged_in()}
+    return {
+        "configured": bool(SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET),
+        "logged_in": is_logged_in(),
+        "redirect_uri": SPOTIFY_REDIRECT_URI,
+        "app_base_url": APP_BASE_URL,
+    }
 
 @router.post("/logout")
 def logout():

@@ -12,9 +12,16 @@ venv/
 env/
 .env
 
-# Docker and Local environment secrets (keep .env.example)
+# Docker environment secrets (keep docker/.env.example)
 docker/.env
+# Old local env file location (now: .env in the project root)
 local/.env.local
+
+# YouTube cookies (account credentials!)
+cookies.txt
+
+# FFmpeg binary dropped into the project root
+ffmpeg.exe
 
 # Python Cache
 __pycache__/
@@ -27,8 +34,8 @@ __pycache__/
 .env
 # Note: .env.example IS committed (it's a template without real values)
 
-# ── Docker ─────────────────────────────────────────────────────────────────────
-.dockerignore
+# ── Spotipy token cache ────────────────────────────────────────────────────────
+.cache
 
 # ── Node / Frontend tooling ────────────────────────────────────────────────────
 node_modules/

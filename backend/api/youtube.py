@@ -8,6 +8,8 @@ yt = YTMusic()
 @router.get("/search")
 def search_items(query: str, filter: str = "artists"):
     """Search for artists, songs, or albums."""
+    if filter not in ("artists", "songs", "albums"):
+        raise HTTPException(status_code=400, detail="filter must be one of: artists, songs, albums")
     try:
         results = yt.search(query, filter=filter)
         return results
@@ -24,7 +26,7 @@ def get_song_info(video_id: str):
         
         # Format similar to a list of search results for a song
         thumbnails = video_details.get("thumbnail", {}).get("thumbnails", [])
-        thumbnail_url = thumbnails[-1].get("url") if thumbnails else "https://via.placeholder.com/50"
+        thumbnail_url = thumbnails[-1].get("url") if thumbnails else "/placeholder.svg"
         
         return [{
             "videoId": video_id,
@@ -55,7 +57,9 @@ def get_artist(browse_id: str):
             "singles": singles,
             "songsBrowseId": artist_details.get("songs", {}).get("browseId"),
             "albumsBrowseId": artist_details.get("albums", {}).get("browseId"),
-            "albumsParams": artist_details.get("albums", {}).get("params")
+            "albumsParams": artist_details.get("albums", {}).get("params"),
+            "singlesBrowseId": artist_details.get("singles", {}).get("browseId"),
+            "singlesParams": artist_details.get("singles", {}).get("params"),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
