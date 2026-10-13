@@ -8,8 +8,9 @@ import yt_dlp
 
 router = APIRouter()
 
-# Downloads folder
-DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "downloads")
+# Downloads folder: read from environment (set in Docker), fallback to project root for local dev
+_default_downloads = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "downloads")
+DOWNLOADS_DIR = os.environ.get("DOWNLOADS_DIR", _default_downloads)
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 # In-memory dictionary to track progress

@@ -1,0 +1,22 @@
+services:
+  utube-mp3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: utube-mp3
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent storage: downloaded files and SQLite database
+      - utube_data:/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    environment:
+      - APP_ENV=docker
+      - DOWNLOADS_DIR=/data/downloads
+      - DB_PATH=/data/downloads.db
+
+volumes:
+  utube_data:
+    driver: local

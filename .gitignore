@@ -12,6 +12,10 @@ venv/
 env/
 .env
 
+# Docker and Local environment secrets (keep .env.example)
+docker/.env
+local/.env.local
+
 # Python Cache
 __pycache__/
 *.py[cod]
