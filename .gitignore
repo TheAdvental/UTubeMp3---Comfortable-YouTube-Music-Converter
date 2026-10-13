@@ -1,13 +1,13 @@
-# Database
+# ── Database ───────────────────────────────────────────────────────────────────
 *.db
 *.sqlite
 *.sqlite3
-downloads.db
 
-# Downloads directory (where downloaded music goes)
+# ── Downloaded music ───────────────────────────────────────────────────────────
 downloads/
+data/
 
-# Python Virtual Environment
+# ── Python ─────────────────────────────────────────────────────────────────────
 venv/
 env/
 .env
@@ -21,12 +21,20 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
 
-# Node/Frontend
+# ── Environment / Secrets ──────────────────────────────────────────────────────
+.env
+# Note: .env.example IS committed (it's a template without real values)
+
+# ── Docker ─────────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Node / Frontend tooling ────────────────────────────────────────────────────
 node_modules/
 .npm
 
-# OS generated files
+# ── OS generated ───────────────────────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
@@ -34,3 +42,8 @@ node_modules/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp

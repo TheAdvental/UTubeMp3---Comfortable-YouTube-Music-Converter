@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8000/api';
+const API_URL = window.location.origin + '/api';
 
 const TRANSLATIONS = {
     en: {
@@ -68,6 +68,29 @@ const TRANSLATIONS = {
         deleteSuccess: "Successfully deleted selected items.",
         deleteFailed: "Failed to delete.",
         multiSelectMode: "Select Multiple",
+        saveToDevice: "💾 Save to device",
+        // Spotify
+        spotifyTab: "Spotify",
+        spotifyUrlTitle: "Open Spotify Playlist / Album",
+        spotifyUrlPlaceholder: "Paste Spotify playlist or album link...",
+        spotifySearchTitle: "Search Spotify Catalog",
+        spotifySearchPlaceholder: "Search Spotify...",
+        openBtn: "Open",
+        playlists: "Playlists",
+        tracks: "Tracks",
+        fromSpotify: "FROM SPOTIFY",
+        backToSpotify: "← Back to Spotify",
+        downloadEntirePlaylist: "⬇ Download all tracks",
+        playlistTracks: "Playlist tracks",
+        albumTracks: "Album tracks",
+        spotifyCredsTitle: "Spotify API not configured",
+        spotifyCredsDesc: "Add your Client ID and Secret in backend/config.py to enable Spotify features.",
+        resolving: "Finding...",
+        spotifySearchFailed: "Failed to search Spotify",
+        spotifyLoadFailed: "Failed to load from Spotify",
+        spotifyResolveFailed: "Could not find this track on YouTube",
+        playlistPrivateError: "This playlist is private. Please right-click it in Spotify → Make public, then try again.",
+        noAlbums: "No albums found.",
     },
     uk: {
         title: "UTubeMp3 - Завантажувач Музики",
@@ -136,6 +159,29 @@ const TRANSLATIONS = {
         deleteSuccess: "Успішно видалено.",
         deleteFailed: "Не вдалося видалити.",
         multiSelectMode: "Вибрати декілька",
+        saveToDevice: "💾 Зберегти на пристрій",
+        // Spotify
+        spotifyTab: "Spotify",
+        spotifyUrlTitle: "Відкрити плейлист / альбом Spotify",
+        spotifyUrlPlaceholder: "Вставте посилання на плейліст або альбом Spotify...",
+        spotifySearchTitle: "Пошук по каталогу Spotify",
+        spotifySearchPlaceholder: "Пошук в Spotify...",
+        openBtn: "Відкрити",
+        playlists: "Плейлисти",
+        tracks: "Треки",
+        fromSpotify: "З SPOTIFY",
+        backToSpotify: "← Назад до Spotify",
+        downloadEntirePlaylist: "⬇ Завантажити всі треки",
+        playlistTracks: "Треки плейлиста",
+        albumTracks: "Треки альбому",
+        spotifyCredsTitle: "Spotify API не налаштовано",
+        spotifyCredsDesc: "Додайте Client ID та Secret у backend/config.py щоб увімкнути Spotify.",
+        resolving: "Пошук...",
+        spotifySearchFailed: "Не вдалося виконати пошук у Spotify",
+        spotifyLoadFailed: "Не вдалося завантажити дані зі Spotify",
+        spotifyResolveFailed: "Не вдалося знайти трек на YouTube",
+        playlistPrivateError: "Плейліст приватний. Натисніть ПКМ на нього в Spotify → 'Зробити публічним', і спробуйте знову.",
+        noAlbums: "Альбоми не знайдені.",
     }
 };
 
@@ -245,10 +291,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // DOM Elements
 const navSearch = document.getElementById('nav-search');
 const navHistory = document.getElementById('nav-history');
+const navSpotify = document.getElementById('nav-spotify');
 const secSearch = document.getElementById('section-search');
 const secArtist = document.getElementById('section-artist');
 const secAlbum = document.getElementById('section-album');
 const secHistory = document.getElementById('section-history');
+const secSpotify = document.getElementById('section-spotify');
+const secSpotifyPlaylist = document.getElementById('section-spotify-playlist');
+const secSpotifyArtist = document.getElementById('section-spotify-artist');
 
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
@@ -273,6 +323,9 @@ window.addEventListener('popstate', (e) => {
         else if (e.state.section === 'history') { switchSection('history', false); loadHistory(); }
         else if (e.state.section === 'artist') loadArtist(e.state.browseId, false);
         else if (e.state.section === 'album') loadAlbum(e.state.browseId, false);
+        else if (e.state.section === 'spotify') switchSection('spotify', false);
+        else if (e.state.section === 'spotify-playlist') loadSpotifyPlaylist(e.state.spotifyId, e.state.spotifyType, false);
+        else if (e.state.section === 'spotify-artist') loadSpotifyArtist(e.state.spotifyId, false);
     } else {
         switchSection('search', false);
     }
@@ -285,6 +338,7 @@ navHistory.addEventListener('click', () => {
     switchSection('history');
     loadHistory();
 });
+navSpotify.addEventListener('click', () => switchSection('spotify'));
 
 document.querySelector('.logo')?.addEventListener('click', () => {
     navSearch.click();
@@ -309,13 +363,21 @@ function switchSection(sec, pushState = true) {
     removeCheckboxes('history-results');
     document.getElementById('multi-select-history-btn')?.classList.remove('active');
 
+    document.getElementById('spotify-pl-tracks')?.classList.remove('selection-mode');
+    removeCheckboxes('spotify-pl-tracks');
+    document.getElementById('multi-select-spotify-btn')?.classList.remove('active');
+
     navSearch.classList.remove('active');
     navHistory.classList.remove('active');
+    navSpotify.classList.remove('active');
     
     secSearch.style.display = 'none';
     secArtist.style.display = 'none';
     secAlbum.style.display = 'none';
     secHistory.style.display = 'none';
+    secSpotify.style.display = 'none';
+    secSpotifyPlaylist.style.display = 'none';
+    secSpotifyArtist.style.display = 'none';
     
     if (sec === 'search') {
         navSearch.classList.add('active');
@@ -327,6 +389,15 @@ function switchSection(sec, pushState = true) {
     } else if (sec === 'history') {
         navHistory.classList.add('active');
         secHistory.style.display = 'block';
+    } else if (sec === 'spotify') {
+        navSpotify.classList.add('active');
+        secSpotify.style.display = 'block';
+    } else if (sec === 'spotify-playlist') {
+        navSpotify.classList.add('active');
+        secSpotifyPlaylist.style.display = 'block';
+    } else if (sec === 'spotify-artist') {
+        navSpotify.classList.add('active');
+        secSpotifyArtist.style.display = 'block';
     }
     
     if (pushState) {
@@ -829,6 +900,17 @@ function pollProgress(videoId, title) {
                 
                 if (data.status === 'completed') {
                     showToast(t('success'), `${title} ${t('downloadSuccessMsg')}`, 'success');
+                    // Auto-trigger browser download so the file is also saved to the user's device.
+                    // Small delay ensures the server has fully flushed the file before streaming it.
+                    setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = `${API_URL}/downloader/file/${videoId}`;
+                        // Set explicit .mp3 extension so Chrome never saves it as .txt
+                        a.download = `${title}.mp3`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }, 300);
                 } else {
                     showToast(t('error'), `${t('downloadErrorMsg')} ${title}`, 'error');
                 }
@@ -868,11 +950,15 @@ async function loadHistory() {
             div.innerHTML = `
                 <img src="${song.thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
                 <div class="song-info">
-                    <h4>${song.title} <span style="font-size: 0.7rem; background: var(--success); padding: 2px 6px; border-radius: 4px; margin-left:10px;">${t('mp3Saved')}</span></h4>
+                    <h4>${song.title.replace(/\.(mp3|m4a|webm|ogg|flac|wav|opus)$/i, '')} <span style="font-size: 0.7rem; background: var(--success); padding: 2px 6px; border-radius: 4px; margin-left:10px;">${t('mp3Saved')}</span></h4>
                     <p>${song.artist} • ${t('downloadedAtStr')} ${dateStr}</p>
                     <p style="font-size:0.75rem; color:#64748b; margin-top: 4px;">${t('fileStr')} ${song.file_path}</p>
                 </div>
-                <button class="action-btn delete-btn" style="margin-left: 1rem;" onclick="deleteSongs(['${song.video_id}'])">🗑</button>
+                <a href="${API_URL}/downloader/file/${song.video_id}" download
+                   style="margin-left: 0.5rem; text-decoration: none;">
+                    <button class="action-btn" style="background: var(--primary); color: white;">${t('saveToDevice')}</button>
+                </a>
+                <button class="action-btn delete-btn" style="margin-left: 0.5rem;" onclick="deleteSongs(['${song.video_id}'])">🗑</button>
             `;
             historyResults.appendChild(div);
         });
@@ -1092,3 +1178,444 @@ function showToast(title, message, type = 'info') {
 }
 
 // Replaced by queue system
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SPOTIFY INTEGRATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Helper: parse Spotify URL ─────────────────────────────────────────────────
+function parseSpotifyUrl(url) {
+    // Matches: open.spotify.com/playlist/ID, /album/ID, /artist/ID, /track/ID
+    const match = url.match(/open\.spotify\.com\/(playlist|album|artist|track)\/([A-Za-z0-9]+)/);
+    if (match) return { type: match[1], id: match[2] };
+    // Also handle spotify:playlist:ID URIs
+    const uriMatch = url.match(/spotify:(playlist|album|artist|track):([A-Za-z0-9]+)/);
+    if (uriMatch) return { type: uriMatch[1], id: uriMatch[2] };
+    return null;
+}
+
+// ── Helper: format ms duration to mm:ss ──────────────────────────────────────
+function formatDuration(ms) {
+    if (!ms) return '';
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// ── Spotify credentials + OAuth status ──────────────────────────────────────
+async function checkSpotifyCredentials() {
+    try {
+        const res = await fetch(`${API_URL}/spotify/search?q=test&type=track`);
+        const credsBanner = document.getElementById('spotify-creds-warning');
+        if (res.status === 503) {
+            credsBanner.style.display = 'flex';
+            document.getElementById('spotify-login-banner').style.display = 'none';
+            return false;
+        }
+        credsBanner.style.display = 'none';
+        // Check OAuth status
+        await checkSpotifyAuthStatus();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+async function checkSpotifyAuthStatus() {
+    try {
+        const res = await fetch(`${API_URL}/spotify/auth-status`);
+        const data = await res.json();
+        const banner = document.getElementById('spotify-login-banner');
+        const loginBtn = document.getElementById('spotify-login-btn');
+        const logoutBtn = document.getElementById('spotify-logout-btn');
+        const statusSpan = document.getElementById('spotify-login-status');
+        const loginTitle = document.getElementById('spotify-login-title');
+        const setupSteps = document.getElementById('spotify-setup-steps');
+
+        banner.style.display = 'flex';
+
+        if (data.logged_in) {
+            loginBtn.style.display = 'none';
+            logoutBtn.style.display = 'inline-block';
+            statusSpan.style.display = 'inline';
+            if (loginTitle) loginTitle.textContent = currentLang === 'uk' ? '✓ Spotify підключено' : '✓ Spotify Connected';
+            if (setupSteps) setupSteps.style.display = 'none';
+        } else {
+            loginBtn.style.display = 'inline-block';
+            logoutBtn.style.display = 'none';
+            statusSpan.style.display = 'none';
+            if (loginTitle) loginTitle.textContent = currentLang === 'uk' ? 'Підключіть Spotify для відкриття плейлистів' : 'Connect Spotify to open playlists';
+            if (setupSteps) setupSteps.style.display = '';
+        }
+    } catch (e) {}
+}
+
+async function spotifyLogout() {
+    try {
+        await fetch(`${API_URL}/spotify/logout`, { method: 'POST' });
+        await checkSpotifyAuthStatus();
+        showToast(t('info'), 'Spotify disconnected', 'info');
+    } catch (e) {}
+}
+
+// ── Spotify URL open button ───────────────────────────────────────────────────
+document.getElementById('spotify-url-btn').addEventListener('click', handleSpotifyUrl);
+document.getElementById('spotify-url-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleSpotifyUrl();
+});
+
+async function handleSpotifyUrl() {
+    const input = document.getElementById('spotify-url-input').value.trim();
+    if (!input) return;
+
+    const parsed = parseSpotifyUrl(input);
+    if (!parsed) {
+        showToast(t('error'), t('invalidUrlError'), 'error');
+        return;
+    }
+
+    if (parsed.type === 'playlist' || parsed.type === 'album') {
+        await loadSpotifyPlaylist(parsed.id, parsed.type, true);
+    } else if (parsed.type === 'artist') {
+        await loadSpotifyArtist(parsed.id, true);
+    } else if (parsed.type === 'track') {
+        // Single track: resolve and download immediately
+        showToast(t('info'), t('resolving'), 'info');
+        // We need some minimal info — use the URL as a hint only; 
+        // we can't query the track without credentials check happening first.
+        showToast(t('error'), 'For individual tracks, please use Search to find the song.', 'info');
+    }
+}
+
+// ── Spotify Search ────────────────────────────────────────────────────────────
+document.getElementById('spotify-search-btn').addEventListener('click', doSpotifySearch);
+document.getElementById('spotify-search-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') doSpotifySearch();
+});
+
+async function doSpotifySearch() {
+    const query = document.getElementById('spotify-search-input').value.trim();
+    const type = document.getElementById('spotify-search-type').value;
+    if (!query) return;
+
+    const loader = document.getElementById('spotify-search-loader');
+    const results = document.getElementById('spotify-search-results');
+    results.innerHTML = '';
+    loader.style.display = 'block';
+
+    try {
+        const res = await fetch(`${API_URL}/spotify/search?q=${encodeURIComponent(query)}&type=${type}`);
+        const data = await res.json();
+        loader.style.display = 'none';
+
+        if (!data || data.detail || data.length === 0) {
+            results.innerHTML = `<p style="text-align:center; width:100%; grid-column: 1 / -1;">${t('nothingFound')}</p>`;
+            return;
+        }
+
+        if (type === 'track') {
+            results.className = 'list-container';
+            data.forEach(track => {
+                results.appendChild(createSpotifySongItem(track));
+            });
+        } else if (type === 'album') {
+            results.className = 'grid-albums';
+            data.forEach(album => {
+                const card = document.createElement('div');
+                card.className = 'spotify-playlist-card';
+                card.innerHTML = `
+                    <img src="${album.thumbnail}" alt="${album.title}">
+                    <h4>${album.title}</h4>
+                    <p>${album.artistStr} • ${album.year}</p>
+                `;
+                card.addEventListener('click', () => loadSpotifyPlaylist(album.id, 'album', true));
+                results.appendChild(card);
+            });
+        } else if (type === 'playlist') {
+            results.className = 'grid-albums';
+            data.forEach(pl => {
+                const card = document.createElement('div');
+                card.className = 'spotify-playlist-card';
+                card.innerHTML = `
+                    <img src="${pl.thumbnail}" alt="${pl.name}">
+                    <h4>${pl.name}</h4>
+                    <p>${pl.owner} • ${pl.total_tracks} ${t('tracks').toLowerCase()}</p>
+                `;
+                card.addEventListener('click', () => loadSpotifyPlaylist(pl.id, 'playlist', true));
+                results.appendChild(card);
+            });
+        } else if (type === 'artist') {
+            results.className = 'grid-results';
+            data.forEach(artist => {
+                const card = document.createElement('div');
+                card.className = 'artist-card';
+                card.innerHTML = `
+                    <img style="width:80px;height:80px;border-radius:50%;object-fit:cover;" src="${artist.thumbnail}" alt="${artist.name}">
+                    <h3 style="font-size:1rem;">${artist.name}</h3>
+                `;
+                card.addEventListener('click', () => loadSpotifyArtist(artist.id, true));
+                results.appendChild(card);
+            });
+        }
+    } catch (err) {
+        loader.style.display = 'none';
+        showToast(t('error'), t('spotifySearchFailed'), 'error');
+    }
+}
+
+// ── Spotify Song Item (with resolve-then-download) ────────────────────────────
+function createSpotifySongItem(track) {
+    const div = document.createElement('div');
+    div.className = 'song-item spotify-song-item';
+
+    const safeTitle = (track.title || '').replace(/"/g, '&quot;');
+    const safeArtist = (track.artistStr || '').replace(/"/g, '&quot;');
+    const safeThumb = (track.thumbnail || '').replace(/"/g, '&quot;');
+
+    div.setAttribute('data-spotify-id', track.id);
+    div.setAttribute('data-title', safeTitle);
+    div.setAttribute('data-artist', safeArtist);
+    div.setAttribute('data-thumbnail', safeThumb);
+
+    const duration = formatDuration(track.duration_ms);
+
+    div.innerHTML = `
+        <img src="${track.thumbnail || 'https://via.placeholder.com/50'}" alt="cover">
+        <div class="song-info">
+            <h4>${track.title} <span class="spotify-badge">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                Spotify
+            </span></h4>
+            <p>${track.artistStr}${track.album ? ' • ' + track.album : ''}</p>
+        </div>
+        ${duration ? `<span class="track-duration">${duration}</span>` : ''}
+        <button class="download-btn spotify-resolve-btn">
+            ${t('downloadToMp3')}
+        </button>
+    `;
+
+    const btn = div.querySelector('.spotify-resolve-btn');
+    btn.addEventListener('click', () => resolveAndDownloadSpotify(track, btn, div));
+
+    return div;
+}
+
+// ── Resolve Spotify track → YouTube → download ────────────────────────────────
+const spotifyResolveCache = {}; // Cache resolved video IDs
+
+async function resolveAndDownloadSpotify(track, btn, itemDiv) {
+    // If already resolved, download directly
+    if (spotifyResolveCache[track.id]) {
+        const { videoId, title, artist, thumbnail } = spotifyResolveCache[track.id];
+        startDownload(videoId, title, artist, thumbnail);
+        return;
+    }
+
+    // Start resolving
+    btn.textContent = t('resolving');
+    btn.classList.add('resolving-btn');
+
+    try {
+        const res = await fetch(
+            `${API_URL}/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artistStr)}`
+        );
+        if (!res.ok) throw new Error('resolve failed');
+        const data = await res.json();
+        const videoId = data.videoId;
+
+        // Cache result and set video-id on item for multi-select
+        spotifyResolveCache[track.id] = {
+            videoId,
+            title: track.title,
+            artist: track.artistStr,
+            thumbnail: track.thumbnail
+        };
+        itemDiv.setAttribute('data-video-id', videoId);
+
+        btn.classList.remove('resolving-btn');
+        btn.textContent = t('downloadToMp3');
+        startDownload(videoId, track.title, track.artistStr, track.thumbnail);
+    } catch (e) {
+        btn.classList.remove('resolving-btn');
+        btn.textContent = t('downloadToMp3');
+        showToast(t('error'), t('spotifyResolveFailed'), 'error');
+    }
+}
+
+// ── Load Spotify Playlist or Album ────────────────────────────────────────────
+let currentSpotifyTracks = [];
+
+async function loadSpotifyPlaylist(id, type, pushState = true) {
+    switchSection('spotify-playlist', false);
+    if (pushState) {
+        window.history.pushState({ section: 'spotify-playlist', spotifyId: id, spotifyType: type }, '', '#spotify-playlist');
+    }
+
+    const tracksContainer = document.getElementById('spotify-pl-tracks');
+    const loader = document.getElementById('spotify-pl-loader');
+    tracksContainer.innerHTML = '';
+    loader.style.display = 'block';
+
+    try {
+        const endpoint = type === 'album' ? `album/${id}` : `playlist/${id}`;
+        const res = await fetch(`${API_URL}/spotify/${endpoint}`);
+        const data = await res.json();
+
+        loader.style.display = 'none';
+
+        if (!res.ok || data.detail) {
+            throw new Error(data.detail || `HTTP ${res.status}`);
+        }
+
+        // Fill header
+        document.getElementById('spotify-pl-img').src = data.thumbnail;
+        document.getElementById('spotify-pl-title').textContent = data.title || data.name;
+
+        const trackCount = data.total_tracks || (data.tracks && data.tracks.length) || 0;
+        const artistStr = data.artistStr || data.owner || '';
+        const year = data.year || '';
+        let descParts = [];
+        if (artistStr) descParts.push(artistStr);
+        if (year) descParts.push(year);
+        descParts.push(`${trackCount} ${t('tracks').toLowerCase()}`);
+        document.getElementById('spotify-pl-desc').textContent = descParts.join(' • ');
+
+        const titleEl = document.getElementById('spotify-pl-tracks-title');
+        titleEl.setAttribute('data-i18n', type === 'album' ? 'albumTracks' : 'playlistTracks');
+        titleEl.textContent = t(type === 'album' ? 'albumTracks' : 'playlistTracks');
+
+        currentSpotifyTracks = data.tracks || [];
+        currentSpotifyTracks.forEach(track => {
+            tracksContainer.appendChild(createSpotifySongItem(track));
+        });
+
+    } catch (err) {
+        loader.style.display = 'none';
+        const msg = err.message || '';
+        if (msg.includes('NEED_LOGIN')) {
+            // Needs Spotify OAuth — show the login banner and go back to Spotify tab
+            switchSection('spotify', true);
+            await checkSpotifyAuthStatus(); // will show the banner
+            showToast(t('error'),
+                currentLang === 'uk'
+                    ? 'Увійдіть через Spotify щоб відкривати плейлисти. Натисніть "Connect Spotify" вище.'
+                    : 'Log in with Spotify to open playlists. Click "Connect Spotify" above.',
+                'error');
+        } else if (msg.includes('PLAYLIST_PRIVATE')) {
+            showToast(t('error'), t('playlistPrivateError'), 'error');
+            switchSection('spotify', true);
+        } else {
+            showToast(t('error'), t('spotifyLoadFailed'), 'error');
+        }
+    }
+}
+
+// ── Download entire Spotify playlist ─────────────────────────────────────────
+document.getElementById('download-spotify-pl-btn').addEventListener('click', async () => {
+    if (!currentSpotifyTracks.length) return;
+
+    showToast(t('info'), `${t('downloadStarted')} ${currentSpotifyTracks.length} ${t('tracks').toLowerCase()}`, 'info');
+
+    // Resolve all tracks sequentially and then queue downloads with stagger
+    let delay = 0;
+    for (const track of currentSpotifyTracks) {
+        setTimeout(async () => {
+            try {
+                let videoId, title = track.title, artist = track.artistStr, thumbnail = track.thumbnail;
+                if (spotifyResolveCache[track.id]) {
+                    ({ videoId, title, artist, thumbnail } = spotifyResolveCache[track.id]);
+                } else {
+                    const res = await fetch(
+                        `${API_URL}/spotify/resolve?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artistStr)}`
+                    );
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    videoId = data.videoId;
+                    spotifyResolveCache[track.id] = { videoId, title, artist, thumbnail };
+                }
+                startDownload(videoId, title, artist, thumbnail);
+            } catch (e) {
+                console.error('Resolve failed for', track.title, e);
+            }
+        }, delay);
+        delay += 800;
+    }
+});
+
+// ── Multi-select for Spotify playlist ─────────────────────────────────────────
+document.getElementById('multi-select-spotify-btn')?.addEventListener('click', () => {
+    const list = document.getElementById('spotify-pl-tracks');
+    const btn = document.getElementById('multi-select-spotify-btn');
+    list.classList.toggle('selection-mode');
+    if (list.classList.contains('selection-mode')) {
+        btn.classList.add('active');
+        // We inject checkboxes, but Spotify items don't yet have video-id
+        // Inject checkboxes only for resolved items
+        list.querySelectorAll('.spotify-song-item').forEach(item => {
+            if (!item.querySelector('.song-checkbox-container')) {
+                const vid = item.getAttribute('data-video-id') || '';
+                const cbContainer = document.createElement('div');
+                cbContainer.className = 'song-checkbox-container';
+                cbContainer.innerHTML = `<input type="checkbox" class="song-checkbox" data-type="download" data-video-id="${vid}" data-title="${item.getAttribute('data-title') || ''}" data-artist="${item.getAttribute('data-artist') || ''}" data-thumbnail="${item.getAttribute('data-thumbnail') || ''}">`;
+                item.prepend(cbContainer);
+            }
+        });
+    } else {
+        btn.classList.remove('active');
+        uncheckAll();
+        removeCheckboxes('spotify-pl-tracks');
+    }
+});
+
+// ── Load Spotify Artist ───────────────────────────────────────────────────────
+async function loadSpotifyArtist(id, pushState = true) {
+    switchSection('spotify-artist', false);
+    if (pushState) {
+        window.history.pushState({ section: 'spotify-artist', spotifyId: id }, '', '#spotify-artist');
+    }
+
+    const albumsContainer = document.getElementById('spotify-artist-albums');
+    albumsContainer.innerHTML = '<div class="loader"></div>';
+
+    try {
+        const res = await fetch(`${API_URL}/spotify/artist/${id}`);
+        const data = await res.json();
+        if (data.detail) throw new Error(data.detail);
+
+        document.getElementById('spotify-artist-img').src = data.thumbnail;
+        document.getElementById('spotify-artist-name').textContent = data.name;
+
+        let meta = [];
+        if (data.genres && data.genres.length) meta.push(data.genres.slice(0, 3).join(', '));
+        if (data.followers) meta.push(`${data.followers.toLocaleString()} followers`);
+        document.getElementById('spotify-artist-meta').textContent = meta.join(' • ');
+
+        albumsContainer.innerHTML = '';
+        if (data.albums && data.albums.length) {
+            data.albums.forEach(album => {
+                const card = document.createElement('div');
+                card.className = 'spotify-playlist-card';
+                card.innerHTML = `
+                    <img src="${album.thumbnail}" alt="${album.title}">
+                    <h4>${album.title}</h4>
+                    <p>${album.type === 'single' ? 'Single' : 'Album'} • ${album.year}</p>
+                `;
+                card.addEventListener('click', () => loadSpotifyPlaylist(album.id, 'album', true));
+                albumsContainer.appendChild(card);
+            });
+        } else {
+            albumsContainer.innerHTML = `<p>${t('noAlbums')}</p>`;
+        }
+    } catch (err) {
+        showToast(t('error'), t('spotifyLoadFailed'), 'error');
+    }
+}
+
+// ── Back buttons ─────────────────────────────────────────────────────────────
+document.getElementById('back-to-spotify').addEventListener('click', () => history.back());
+document.getElementById('back-to-spotify-from-artist').addEventListener('click', () => history.back());
+
+// ── Check credentials on Spotify tab open ─────────────────────────────────────
+navSpotify.addEventListener('click', () => {
+    checkSpotifyCredentials();
+});

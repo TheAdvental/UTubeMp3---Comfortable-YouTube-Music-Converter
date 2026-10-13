@@ -1,73 +1,109 @@
-﻿# UTubeMp3 - Comfortable YouTube Music Converter
+# 🎵 UTubeMp3 — Comfortable YouTube Music Converter
 
-***"Good morning, afternoon, or evening. This is a solution to my painful problem (downloading music) vibecoded in an hour. I needed to solve the problem of downloading large volumes of music as quickly as possible, so I added the ability to download entire albums at once. I hope this site will be as useful to someone else as it was to me."***
-
----
-
-## Project Structure
-
-```
-.
-|-- backend/          # Shared FastAPI backend (used by both profiles)
-|-- frontend/         # Shared HTML/CSS/JS frontend
-|-- local/            # Local Windows profile
-|   |-- install.bat   # One-time setup
-|   |-- run.bat       # Run the server locally
-|   `-- .env.local    # Local environment config (gitignored)
-|-- docker/           # Docker/server profile
-|   |-- Dockerfile
-|   |-- docker-compose.yml
-|   `-- .env.example  # Copy to .env and fill in your values
-`-- requirements.txt
-```
+A beautiful web application for downloading music from YouTube Music, with Spotify catalog search, playlist and album browsing.
 
 ---
 
-## Running Locally (Windows)
+## ✨ Features
 
-### Prerequisites
-1. **Python 3.10+** installed
-2. **FFmpeg** installed and available in your PATH
-   - Install via winget: `winget install Gyan.FFmpeg`
-
-### Setup (first time only)
-Double-click: `local\install.bat`
-
-### Run
-Double-click: `local\run.bat`
-
-The browser opens automatically at http://localhost:8000.
+- 🔍 **YouTube Music search** — find songs, artists, albums
+- 🎵 **Spotify search** — browse Spotify catalog and download tracks via YouTube
+- 📋 **Spotify playlists & albums** — open by URL and download all tracks
+- 🎤 **Artist pages** — browse discography
+- 📚 **Download history** — library of all downloaded tracks
+- 🏷️ **Smart naming** — files saved as `Artist - Title.mp3`
 
 ---
 
-## Running in Docker (Server)
+## 🚀 Run Locally (Windows)
 
-### Prerequisites
-- Docker and Docker Compose installed on the server
-
-### Setup
 ```bash
-# 1. Copy the env template
-cp docker/.env.example docker/.env
-
-# 2. Build and start the container
-docker compose -f docker/docker-compose.yml up -d --build
+# Just double-click:
+run.bat
 ```
 
-The app will be available at `http://<your-server-ip>:8000`.
-
-Downloaded MP3s and the SQLite database are stored in a persistent Docker volume (utube_data).
-
-### Stop
-```bash
-docker compose -f docker/docker-compose.yml down
-```
-
-### Logs
-```bash
-docker logs utube-mp3 -f
-```
+App opens at `http://localhost:8000`
 
 ---
 
-*(All converted MP3s appear in the downloads folder - locally, or inside the Docker volume on the server.)*
+## 🐳 Deploy with Docker (Linux Server)
+
+### 1. Install Docker on your server
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+### 2. Clone the repo
+
+```bash
+git clone https://github.com/YOUR_USERNAME/UTubeMp3.git
+cd UTubeMp3
+```
+
+### 3. Create `.env` file
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Fill in your values:
+```env
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_REDIRECT_URI=http://192.168.1.100:8000/api/spotify/callback
+#                    ↑ use your server's local IP or public IP/domain
+```
+
+> 💡 **Get Spotify credentials**: [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+> — Create an app → note Client ID & Secret
+
+### 4. Build and start
+
+```bash
+docker compose up -d --build
+```
+
+App is running at `http://YOUR_SERVER_IP:8000`
+
+### 5. Set up Spotify OAuth (for playlists)
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+2. Click your app → **Edit Settings**
+3. Under **Redirect URIs** → Add your `SPOTIFY_REDIRECT_URI` value → **Save**
+4. Open the app → click **🔗 Підключити Spotify** → authorize
+
+### Useful commands
+
+```bash
+docker compose logs -f        # view logs
+docker compose down           # stop
+docker compose up -d          # start
+docker compose up -d --build  # rebuild after code changes
+```
+
+Downloaded music is stored in `./data/downloads/` on the host.
+
+---
+
+## ⚙️ Configuration
+
+| Env Variable | Description | Default |
+|---|---|---|
+| `SPOTIFY_CLIENT_ID` | Spotify app client ID | *(required)* |
+| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret | *(required)* |
+| `SPOTIFY_REDIRECT_URI` | OAuth callback URL | `http://127.0.0.1:8000/api/spotify/callback` |
+| `DOWNLOADS_DIR` | Where MP3 files are saved | `/data/downloads` |
+| `DB_PATH` | SQLite database path | `/data/downloads.db` |
+
+---
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python, FastAPI, yt-dlp, spotipy, ytmusicapi
+- **Frontend**: Vanilla HTML/CSS/JavaScript
+- **Database**: SQLite
+- **Container**: Docker + docker-compose

@@ -1,16 +1,18 @@
 import os
+import re
 import asyncio
+import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from db.database import get_db, DownloadedSong
+from config import DOWNLOADS_DIR
 import yt_dlp
+from mutagen.id3 import ID3, TIT2, TPE2, ID3NoHeaderError
 
 router = APIRouter()
 
-# Downloads folder: read from environment (set in Docker), fallback to project root for local dev
-_default_downloads = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "downloads")
-DOWNLOADS_DIR = os.environ.get("DOWNLOADS_DIR", _default_downloads)
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 # In-memory dictionary to track progress
@@ -38,10 +40,23 @@ def sanitize_filename(name):
         name = name.replace(char, '')
     return name
 
+def tag_mp3(file_path: str, title: str, artist: str):
+    """Write Title and Album Artist ID3 tags to an MP3 file."""
+    try:
+        try:
+            tags = ID3(file_path)
+        except ID3NoHeaderError:
+            tags = ID3()
+        tags["TIT2"] = TIT2(encoding=3, text=title)   # Title
+        tags["TPE2"] = TPE2(encoding=3, text=artist)   # Album artist
+        tags.save(file_path, v2_version=3)
+    except Exception as e:
+        print(f"[tag_mp3] Could not write tags to {file_path}: {e}")
+
 def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: Session):
     safe_title = sanitize_filename(title)
     safe_artist = sanitize_filename(artist)
-    target_filename = f"{safe_title} - {safe_artist}"
+    target_filename = f"{safe_artist} - {safe_title}"
     
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -68,9 +83,11 @@ def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: S
             final_path = base + ".mp3"
             
             # Use provided title/artist or fallback to info
-            final_title = title if title else info.get('title')
-            final_artist = artist if artist else info.get('uploader')
-            final_thumbnail = thumbnail if thumbnail else info.get('thumbnail')
+            # Strip any extension from the fallback title (yt-dlp sometimes includes it)
+            raw_title = title if title else info.get('title', '')
+            final_title = re.sub(r'\.(mp3|m4a|webm|ogg|flac|wav|opus)$', '', raw_title, flags=re.IGNORECASE).strip()
+            final_artist = artist if artist else info.get('uploader', '')
+            final_thumbnail = thumbnail if thumbnail else info.get('thumbnail', '')
             
             db_song = DownloadedSong(
                 video_id=video_id,
@@ -88,6 +105,9 @@ def start_download(video_id: str, title: str, artist: str, thumbnail: str, db: S
             else:
                 db.add(db_song)
             db.commit()
+
+            # Write ID3 tags (Title + Album Artist) to the MP3 file
+            tag_mp3(final_path, final_title, final_artist)
 
             download_progress[video_id] = {"status": "completed", "progress": "100%"}
             
@@ -112,6 +132,24 @@ def get_progress(video_id: str):
 def get_download_history(db: Session = Depends(get_db)):
     songs = db.query(DownloadedSong).order_by(desc(DownloadedSong.downloaded_at)).all()
     return songs
+
+@router.get("/file/{video_id}")
+def download_file(video_id: str, db: Session = Depends(get_db)):
+    """Stream the downloaded MP3 file to the client's browser for saving."""
+    song = db.query(DownloadedSong).filter(DownloadedSong.video_id == video_id).first()
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found in library")
+    if not song.file_path or not os.path.exists(song.file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    filename = os.path.basename(song.file_path)
+    # Use RFC 5987 encoding so non-ASCII (e.g. Cyrillic) names work in all browsers
+    encoded = urllib.parse.quote(filename, safe='')
+    content_disposition = f"attachment; filename*=UTF-8''{encoded}"
+    return FileResponse(
+        path=song.file_path,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": content_disposition},
+    )
 
 from pydantic import BaseModel
 from typing import List
